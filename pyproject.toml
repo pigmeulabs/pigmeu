@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pigmeu-copilot"
+version = "0.1.0"
+description = "Pigmeu Copilot - Automated technical book review generation and SEO-optimized article publishing"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Pigmeu Labs", email = "dev@pigmeu.com"}
+]
+readme = "README.md"
+
+[project.urls]
+Homepage = "https://github.com/pigmeulabs/pigmeu"
+Repository = "https://github.com/pigmeulabs/pigmeu.git"
