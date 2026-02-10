@@ -14,6 +14,7 @@ from src.models.enums import SubmissionStatus
 from src.db.repositories import SubmissionRepository
 from src.api.dependencies import get_submission_repo
 import logging
+from src.workers.worker import start_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,14 @@ async def submit_book(
         # Fetch created document
         doc = await repo.get_by_id(submission_id)
         
+        # Trigger background processing pipeline (Celery)
+        try:
+            logger.info(f"Enqueueing scraping pipeline for: {submission_id}")
+            # Use Celery task to start the pipeline so the request returns quickly
+            start_pipeline.delay(submission_id=submission_id, amazon_url=str(submission.amazon_url))
+        except Exception:
+            logger.exception("Failed to enqueue scraping pipeline")
+
         # Convert to response model
         return SubmissionResponse(
             id=str(doc["_id"]),

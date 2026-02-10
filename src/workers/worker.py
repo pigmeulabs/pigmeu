@@ -23,3 +23,20 @@ app.conf.update(
 def ping():
     """Simple ping task for testing."""
     return "pong"
+
+
+@app.task(name="start_pipeline")
+def start_pipeline(submission_id: str, amazon_url: str):
+    """Entry task to start the scraping pipeline from web requests.
+
+    This task is lightweight and only enqueues the first scraper task,
+    delegating orchestration to the existing scraper task chain.
+    """
+    try:
+        # Import here to avoid circular imports at module import time
+        from src.workers.scraper_tasks import start_scraping_pipeline
+
+        start_scraping_pipeline(submission_id=submission_id, amazon_url=amazon_url)
+        return {"status": "started", "submission_id": submission_id}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}

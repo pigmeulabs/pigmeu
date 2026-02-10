@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pigmeu Copilot — Dashboard</title>
+    <link rel="stylesheet" href="/ui/static/styles.css">
+</head>
+<body>
+    <div class="layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">📚 Pigmeu</div>
+                <div class="app-title">Copilot</div>
+            </div>
+            
+            <nav class="nav-menu">
+                <a href="#tasks" class="nav-link active" data-section="tasks-section">
+                    <span class="icon">📋</span> Tarefas
+                </a>
+                <a href="#submit" class="nav-link" data-section="submit-section">
+                    <span class="icon">➕</span> Nova Tarefa
+                </a>
+                <a href="#settings" class="nav-link" data-section="settings-section">
+                    <span class="icon">⚙️</span> Configurações
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="status-indicator">
+                    <div class="dot online"></div>
+                    <span>Sistema Online</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Header -->
+            <header class="header">
+                <div class="header-left">
+                    <h1 id="page-title">Tarefas</h1>
+                </div>
+                <div class="header-right">
+                    <div class="health-badge">
+                        <span class="dot"></span>
+                        <span id="health-status">Verificando...</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content Area -->
+            <div class="content">
+                <!-- Tasks Section -->
+                <section id="tasks-section" class="section active">
+                    <div class="section-header">
+                        <h2>Minhas Tarefas</h2>
+                        <div class="controls">
+                            <button id="refresh-tasks" class="btn btn-secondary">🔄 Atualizar</button>
+                        </div>
+                    </div>
+
+                    <div class="filters">
+                        <input type="text" id="search-tasks" placeholder="Buscar tarefas..." class="search-input">
+                        <select id="filter-status" class="filter-select">
+                            <option value="">Todos os status</option>
+                            <option value="pending_scrape">Pendente de scrape</option>
+                            <option value="context_generated">Contexto gerado</option>
+                            <option value="article_generated">Artigo gerado</option>
+                        </select>
+                    </div>
+
+                    <div id="tasks-grid" class="tasks-grid">
+                        <div class="loading">Carregando tarefas...</div>
+                    </div>
+
+                    <div class="pagination-controls">
+                        <button id="prev-page" class="btn btn-secondary">← Anterior</button>
+                        <span id="tasks-pagination">Página 1</span>
+                        <button id="next-page" class="btn btn-secondary">Próxima →</button>
+                    </div>
+
+                    <!-- Task Details Modal -->
+                    <div id="task-modal" class="modal">
+                        <div class="modal-content">
+                            <button class="modal-close">&times;</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Submit Section -->
+                <section id="submit-section" class="section">
+                    <div class="section-header">
+                        <h2>Submeter Novo Livro</h2>
+                    </div>
+
+                    <div class="form-container">
+                        <form id="submit-form" class="form">
+                            <div class="form-group">
+                                <label for="title" class="form-label">Título do Livro *</label>
+                                <input type="text" id="title" name="title" class="form-input" required placeholder="Ex: Designing Data-Intensive Applications">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="author_name" class="form-label">Nome do Autor *</label>
+                                <input type="text" id="author_name" name="author_name" class="form-input" required placeholder="Ex: Martin Kleppmann">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="amazon_url" class="form-label">URL Amazon *</label>
+                                <input type="url" id="amazon_url" name="amazon_url" class="form-input" required placeholder="https://amazon.com/...">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="goodreads_url" class="form-label">URL Goodreads (opcional)</label>
+                                <input type="url" id="goodreads_url" name="goodreads_url" class="form-input" placeholder="https://goodreads.com/...">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="author_site" class="form-label">Site do Autor (opcional)</label>
+                                <input type="url" id="author_site" name="author_site" class="form-input" placeholder="https://author.com">
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-large">Submeter Livro</button>
+                            <div id="submit-result" class="form-result"></div>
+                        </form>
+                    </div>
+                </section>
+
+                <!-- Settings Section -->
+                <section id="settings-section" class="section">
+                    <div class="section-header">
+                        <h2>Configurações</h2>
+                    </div>
+
+                    <div class="settings-grid">
+                        <!-- Credentials -->
+                        <div class="settings-card">
+                            <h3>Credenciais de API</h3>
+                            <p class="text-muted">Configure suas credenciais para OpenAI, WordPress e outros serviços.</p>
+
+                            <form id="cred-form" class="form">
+                                <div class="form-group">
+                                    <label for="cred-service" class="form-label">Serviço</label>
+                                    <select id="cred-service" name="service" class="form-input">
+                                        <option value="openai">OpenAI</option>
+                                        <option value="claude">Claude (Anthropic)</option>
+                                        <option value="wordpress">WordPress</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="cred-key" class="form-label">Chave de API</label>
+                                    <input type="password" id="cred-key" name="key" class="form-input" required placeholder="sk-...">
+                                </div>
+
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="encrypted" checked>
+                                    Criptografar
+                                </label>
+
+                                <button type="submit" class="btn btn-primary">Adicionar Credencial</button>
+                            </form>
+
+                            <div id="cred-result" class="form-result"></div>
+
+                            <div class="credentials-list">
+                                <h4>Credenciais Ativas</h4>
+                                <ul id="cred-list" class="items-list">
+                                    <li class="empty-state">Nenhuma credencial configurada</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- Prompts -->
+                        <div class="settings-card">
+                            <h3>Modelos de Prompt</h3>
+                            <p class="text-muted">Crie e gerencie prompts para extração e geração de conteúdo.</p>
+
+                            <form id="prompt-form" class="form">
+                                <div class="form-group">
+                                    <label for="prompt-name" class="form-label">Nome do Prompt</label>
+                                    <input type="text" id="prompt-name" name="name" class="form-input" required placeholder="Ex: Context Generator">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="prompt-purpose" class="form-label">Propósito</label>
+                                    <input type="text" id="prompt-purpose" name="purpose" class="form-input" placeholder="Ex: Gerar contexto do livro">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="prompt-system" class="form-label">System Prompt</label>
+                                    <textarea id="prompt-system" name="system_prompt" class="form-textarea" rows="3" placeholder="Instruções de sistema para o modelo..."></textarea>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="prompt-user" class="form-label">User Prompt</label>
+                                    <textarea id="prompt-user" name="user_prompt" class="form-textarea" rows="3" placeholder="Template de prompt do usuário..."></textarea>
+                                </div>
+
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="prompt-model" class="form-label">Modelo</label>
+                                        <input type="text" id="prompt-model" name="model_id" class="form-input" value="gpt-3.5-turbo" placeholder="gpt-3.5-turbo">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="prompt-temp" class="form-label">Temperatura</label>
+                                        <input type="number" id="prompt-temp" name="temperature" class="form-input" step="0.1" min="0" max="2" value="0.7">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="prompt-tokens" class="form-label">Max Tokens</label>
+                                        <input type="number" id="prompt-tokens" name="max_tokens" class="form-input" value="800" min="1">
+                                    </div>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary">Criar Prompt</button>
+                            </form>
+
+                            <div id="prompt-result" class="form-result"></div>
+
+                            <div class="prompts-list">
+                                <h4>Prompts Disponíveis</h4>
+                                <ul id="prompt-list" class="items-list">
+                                    <li class="empty-state">Nenhum prompt configurado</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script src="/ui/static/app.js"></script>
+</body>
+</html>

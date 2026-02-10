@@ -247,3 +247,69 @@ async def get_task(
         )
 
 
+
+@router.patch("/{submission_id}", response_model=dict, summary="Update submission or book fields")
+async def update_task(
+    submission_id: str,
+    payload: dict,
+    repo: SubmissionRepository = Depends(get_submission_repo),
+    book_repo: BookRepository = Depends(get_book_repo),
+):
+    """Update submission metadata or book extracted fields.
+
+    Payload example:
+    { "submission": {"title": "..."}, "book": {"extracted": {...}} }
+    """
+    try:
+        updated = False
+        if "submission" in payload:
+            updated = await repo.update_fields(submission_id, payload["submission"]) or updated
+
+        if "book" in payload and payload["book"]:
+            # use create_or_update to upsert book extracted data
+            extracted = payload["book"].get("extracted") or {}
+            await book_repo.create_or_update(submission_id=submission_id, extracted=extracted)
+            updated = True
+
+        if not updated:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No valid fields to update")
+
+        return {"status": "ok"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error updating task: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update task")
+
+
+@router.post("/{submission_id}/generate_context", response_model=dict, summary="Trigger context generation")
+async def trigger_context_generation(
+    submission_id: str,
+):
+    """Enqueue background context generation task for this submission."""
+    try:
+        # import Celery task lazily
+        from src.workers.scraper_tasks import generate_context_task
+
+        generate_context_task.delay(submission_id=submission_id)
+        return {"status": "enqueued"}
+    except Exception as e:
+        logger.error(f"❌ Error enqueuing context generation: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to enqueue context generation")
+
+
+@router.post("/{submission_id}/generate_article", response_model=dict, summary="Trigger article generation")
+async def trigger_article_generation(
+    submission_id: str,
+):
+    """Enqueue background article generation task for this submission."""
+    try:
+        from src.workers.scraper_tasks import generate_article_task
+
+        generate_article_task.delay(submission_id=submission_id)
+        return {"status": "enqueued"}
+    except Exception as e:
+        logger.error(f"❌ Error enqueuing article generation: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to enqueue article generation")
+
+

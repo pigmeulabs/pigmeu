@@ -15,6 +15,7 @@ from bson import ObjectId
 
 from celery import shared_task, Task
 from celery.exceptions import MaxRetriesExceededError
+import openai
 
 from src.db.connection import get_db
 from src.db.repositories import (
@@ -453,3 +454,261 @@ def start_scraping_pipeline(submission_id: str, amazon_url: str) -> None:
         submission_id=submission_id,
         amazon_url=amazon_url,
     )
+
+
+@shared_task(bind=True)
+def generate_article_task(self, submission_id: str) -> dict:
+    """Generate a full review article for a submission using prompts.
+
+    Attempts to use stored prompts and an OpenAI credential. Falls back to
+    a simple template-based article when the model is unavailable.
+    """
+    try:
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        async def _run():
+            db = await get_db()
+            submission_repo = SubmissionRepository(db)
+            book_repo = BookRepository(db)
+            kb_repo = KnowledgeBaseRepository(db)
+            # repositories
+            PromptRepo = None
+            CredRepo = None
+            try:
+                from src.db.repositories import PromptRepository, CredentialRepository, ArticleRepository
+                PromptRepo = PromptRepository(db)
+                CredRepo = CredentialRepository(db)
+                ArticleRepo = ArticleRepository(db)
+            except Exception:
+                # ArticleRepository is defined above; if import fails, use available class
+                from src.db.repositories import ArticleRepository as ArticleRepoClass
+                ArticleRepo = ArticleRepoClass(db)
+
+            submission = await submission_repo.get_by_id(submission_id)
+            book = await book_repo.get_by_submission(submission_id)
+            kb = None
+            if book:
+                kb = await kb_repo.get_by_book(str(book.get('_id')))
+
+            title_base = submission.get('title') if submission else 'Book Review'
+            author = submission.get('author_name') if submission else ''
+
+            # select prompt for article generation
+            prompt = None
+            if PromptRepo:
+                prompts = await PromptRepo.list_all()
+                for p in prompts:
+                    if p.get('purpose') and 'article' in p.get('purpose').lower():
+                        prompt = p
+                        break
+                if not prompt and prompts:
+                    prompt = prompts[0]
+
+            system_prompt = prompt.get('system_prompt') if prompt else 'You are an expert technical book reviewer.'
+            user_prompt_template = prompt.get('user_prompt') if prompt else (
+                'Write a comprehensive, SEO-optimized review article for the book "{{title}}" by {{author}}. '
+                'Use the following context and knowledge to produce sections and an engaging conclusion. Produce markdown.'
+            )
+
+            # assemble user prompt
+            user_prompt = user_prompt_template.replace('{{title}}', title_base).replace('{{author}}', author)
+            if kb and kb.get('markdown_content'):
+                user_prompt += '\n\nContext:\n' + kb.get('markdown_content')
+
+            generated_text = None
+
+            # find OpenAI credential
+            openai_key = None
+            if CredRepo:
+                try:
+                    creds = await CredRepo.list_all()
+                    for c in creds:
+                        if c.get('service') == 'openai' and c.get('key'):
+                            openai_key = c.get('key')
+                            break
+                except Exception:
+                    logger.debug('Could not fetch credentials')
+
+            if openai_key:
+                try:
+                    openai.api_key = openai_key
+                    model_id = prompt.get('model_id') if prompt and prompt.get('model_id') else 'gpt-3.5-turbo'
+                    resp = openai.ChatCompletion.create(
+                        model=model_id,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        temperature=(prompt.get('temperature') if prompt else 0.7),
+                        max_tokens=(prompt.get('max_tokens') if prompt else 1200),
+                    )
+                    if resp and getattr(resp, 'choices', None):
+                        choice = resp.choices[0]
+                        if getattr(choice, 'message', None):
+                            generated_text = choice.message.get('content')
+                        else:
+                            generated_text = choice.get('text') or choice.get('message', {}).get('content')
+                except Exception as e:
+                    logger.warning(f'Article model call failed: {e}')
+
+            # fallback simple article
+            if not generated_text:
+                parts = [
+                    f'# {title_base} — Review',
+                    f'**Author:** {author}',
+                    '\n## Introduction\n',
+                    f'This is a short review of "{title_base}" by {author}.',
+                ]
+                if kb and kb.get('markdown_content'):
+                    parts.append('\n## Context and Notes\n')
+                    parts.append(kb.get('markdown_content'))
+                parts.append('\n## Conclusion\n')
+                parts.append('This review was generated automatically.')
+                generated_text = '\n'.join(parts)
+
+            # derive title
+            gen_title = title_base + ' — Review'
+            # store article
+            book_id = str(book.get('_id')) if book else submission_id
+            word_count = len(generated_text.split())
+            article_id = await ArticleRepo.create(
+                book_id=book_id,
+                title=gen_title,
+                content=generated_text,
+                word_count=word_count,
+            )
+
+            # update submission status
+            await submission_repo.update_fields(submission_id, {"status": "article_generated"})
+
+            return {"status": "ok", "article_id": article_id}
+
+        return loop.run_until_complete(_run())
+    except Exception as e:
+        logger.error(f"Error generating article: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
+
+@shared_task(bind=True)
+def generate_context_task(self, submission_id: str) -> dict:
+    """Generate context/knowledge base for a submission using stored prompts.
+
+    This implementation will attempt to use stored prompts and an OpenAI
+    credential (if available) to generate a context via the model. If no
+    credential is present or the model call fails, it will fall back to a
+    simple local generator.
+    """
+    try:
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        async def _run():
+            db = await get_db()
+            submission_repo = SubmissionRepository(db)
+            book_repo = BookRepository(db)
+            kb_repo = KnowledgeBaseRepository(db)
+
+            # Optional repositories
+            PromptRepo = None
+            CredRepo = None
+            try:
+                from src.db.repositories import PromptRepository, CredentialRepository
+                PromptRepo = PromptRepository(db)
+                CredRepo = CredentialRepository(db)
+            except Exception:
+                logger.debug("Prompt/Credential repos not available; continuing without model integration")
+
+            submission = await submission_repo.get_by_id(submission_id)
+            book = await book_repo.get_by_submission(submission_id)
+
+            title = submission.get('title') if submission else 'Unknown'
+            author = submission.get('author_name') if submission else 'Unknown'
+
+            # Select prompt
+            prompt = None
+            if PromptRepo:
+                prompts = await PromptRepo.list_all()
+                for p in prompts:
+                    if p.get('purpose') and 'context' in p.get('purpose').lower():
+                        prompt = p
+                        break
+                if not prompt and prompts:
+                    prompt = prompts[0]
+
+            system_prompt = prompt.get('system_prompt') if prompt else 'You are an assistant that summarizes book information.'
+            user_prompt_template = prompt.get('user_prompt') if prompt else 'Create a structured markdown context for the book titled "{{title}}" by {{author}}.'
+
+            user_prompt = user_prompt_template.replace('{{title}}', title).replace('{{author}}', author)
+            if book and book.get('extracted'):
+                user_prompt += "\n\nExtracted metadata:\n" + "\n".join([f"{k}: {v}" for k, v in book.get('extracted', {}).items()])
+
+            generated_text = None
+
+            # Find OpenAI credential
+            openai_key = None
+            if CredRepo:
+                try:
+                    creds = await CredRepo.list_all()
+                    for c in creds:
+                        if c.get('service') == 'openai' and c.get('key'):
+                            openai_key = c.get('key')
+                            break
+                except Exception:
+                    logger.debug('Failed to list credentials')
+
+            # Attempt real model call if key available
+            if openai_key:
+                try:
+                    openai.api_key = openai_key
+                    model_id = prompt.get('model_id') if prompt and prompt.get('model_id') else 'gpt-3.5-turbo'
+                    resp = openai.ChatCompletion.create(
+                        model=model_id,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        temperature=(prompt.get('temperature') if prompt else 0.7),
+                        max_tokens=(prompt.get('max_tokens') if prompt else 800),
+                    )
+                    # Extract text (compat with returned structure)
+                    generated_text = None
+                    if resp and getattr(resp, 'choices', None):
+                        choice = resp.choices[0]
+                        # support both legacy and newer structures
+                        if getattr(choice, 'message', None):
+                            generated_text = choice.message.get('content')
+                        else:
+                            generated_text = choice.get('text') or choice.get('message', {}).get('content')
+                except Exception as e:
+                    logger.warning(f'OpenAI model call failed: {e}')
+
+            # Fallback generator
+            if not generated_text:
+                md = f"# Context for {title}\n\n**Author:** {author}\n\n"
+                if book and book.get('extracted'):
+                    md += "## Extracted metadata\n"
+                    for k, v in book.get('extracted', {}).items():
+                        md += f"- **{k}**: {v}\n"
+                md += "\n*Note: generated without external model.*"
+                generated_text = md
+
+            # Persist into knowledge base
+            await kb_repo.create_or_update(
+                book_id=str(book.get('_id')) if book else submission_id,
+                markdown_content=generated_text,
+                topics_index=["autogenerated"],
+            )
+
+            # update submission status
+            await submission_repo.update_fields(submission_id, {"status": "context_generated"})
+
+            return {"status": "ok"}
+
+        return loop.run_until_complete(_run())
+    except Exception as e:
+        logger.error(f"Error generating context: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}

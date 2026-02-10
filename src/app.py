@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 import logging
 from src.config import settings
@@ -45,6 +47,18 @@ app = FastAPI(
 # Include routers
 app.include_router(ingest.router)
 app.include_router(tasks.router)
+from src.api import settings as settings_router
+app.include_router(settings_router.router)
+
+
+# Serve a minimal web UI under /ui
+app.mount("/ui/static", StaticFiles(directory="src/static"), name="static")
+
+
+@app.get("/ui", tags=["UI"])
+async def ui_index():
+    """Serve single-page web UI."""
+    return FileResponse("src/static/index.html")
 
 
 @app.get("/health", tags=["Health"])

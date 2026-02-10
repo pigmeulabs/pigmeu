@@ -122,6 +122,17 @@ class SubmissionRepository:
             },
         )
         return result.modified_count > 0
+
+    async def update_fields(self, submission_id: str, fields: Dict[str, Any]) -> bool:
+        """Update arbitrary fields on a submission document."""
+        try:
+            result = await self.collection.update_one(
+                {"_id": ObjectId(submission_id)},
+                {"$set": {**fields, "updated_at": datetime.utcnow()}},
+            )
+            return result.modified_count > 0
+        except Exception:
+            return False
     
     async def check_duplicate(self, amazon_url: str) -> Optional[str]:
         """Check if submission with same Amazon URL already exists.
@@ -410,3 +421,64 @@ class ArticleRepository:
             return await self.collection.find_one({"_id": ObjectId(article_id)})
         except Exception:
             return None
+
+
+class CredentialRepository:
+    """Repository for storing service credentials."""
+
+    def __init__(self, db: AsyncIOMotorDatabase):
+        self.collection = db["credentials"]
+
+    async def create(self, service: str, key: str, encrypted: bool = True) -> str:
+        document = {
+            "service": service,
+            "key": key,
+            "encrypted": bool(encrypted),
+            "created_at": datetime.utcnow(),
+        }
+        result = await self.collection.insert_one(document)
+        return str(result.inserted_id)
+
+    async def list_all(self) -> List[Dict[str, Any]]:
+        return await self.collection.find({}).to_list(None)
+
+    async def get_by_id(self, cred_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            return await self.collection.find_one({"_id": ObjectId(cred_id)})
+        except Exception:
+            return None
+
+    async def delete(self, cred_id: str) -> bool:
+        try:
+            result = await self.collection.delete_one({"_id": ObjectId(cred_id)})
+            return result.deleted_count > 0
+        except Exception:
+            return False
+
+
+class PromptRepository:
+    """Repository for storing prompt templates."""
+
+    def __init__(self, db: AsyncIOMotorDatabase):
+        self.collection = db["prompts"]
+
+    async def create(self, payload: Dict[str, Any]) -> str:
+        doc = {**payload, "created_at": datetime.utcnow()}
+        result = await self.collection.insert_one(doc)
+        return str(result.inserted_id)
+
+    async def list_all(self, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
+        return await self.collection.find({}).skip(skip).limit(limit).to_list(limit)
+
+    async def get_by_id(self, prompt_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            return await self.collection.find_one({"_id": ObjectId(prompt_id)})
+        except Exception:
+            return None
+    
+    async def delete(self, prompt_id: str) -> bool:
+        try:
+            result = await self.collection.delete_one({"_id": ObjectId(prompt_id)})
+            return result.deleted_count > 0
+        except Exception:
+            return False

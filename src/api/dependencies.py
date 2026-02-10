@@ -17,6 +17,20 @@ from src.db.repositories import (
 )
 
 
+async def get_credential_repo(
+    db: AsyncIOMotorDatabase = Depends(get_database),
+) -> 'CredentialRepository':
+    from src.db.repositories import CredentialRepository
+    return CredentialRepository(db)
+
+
+async def get_prompt_repo(
+    db: AsyncIOMotorDatabase = Depends(get_database),
+) -> 'PromptRepository':
+    from src.db.repositories import PromptRepository
+    return PromptRepository(db)
+
+
 async def get_submission_repo(
     db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> SubmissionRepository:
