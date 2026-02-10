@@ -5,6 +5,7 @@ from src.config import settings
 from src.db.connection import close_mongo_client
 from src.db.migrations import run_migrations
 from src.logger import setup_logger
+from src.api import ingest, tasks
 
 # Setup logging
 setup_logger()
@@ -40,6 +41,10 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Include routers
+app.include_router(ingest.router)
+app.include_router(tasks.router)
 
 
 @app.get("/health", tags=["Health"])

@@ -72,7 +72,34 @@ Transform book information from Amazon, Goodreads, and author sites into complet
    curl http://localhost:8000/health
    ```
 
-API available at: **http://localhost:8000/docs**
+API available at: **http://localhost:8000**
+- Swagger Docs: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+## Quick API Examples
+
+### Submit Book for Review
+```bash
+curl -X POST http://localhost:8000/submit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Designing Data-Intensive Applications",
+    "author_name": "Martin Kleppmann",
+    "amazon_url": "https://amazon.com/Designing-Data-Intensive-Applications-1491901632/"
+  }'
+```
+
+### List All Submissions
+```bash
+curl http://localhost:8000/tasks
+```
+
+### Get Submission Details
+```bash
+curl http://localhost:8000/tasks/{submission_id}
+```
+
+See [docs/API.md](docs/API.md) for complete API documentation with examples.
 
 ## Documentation
 

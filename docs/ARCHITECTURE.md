@@ -125,11 +125,15 @@ Pigmeu Copilot is a multi-stage pipeline system for automated technical book rev
 - LLM integration (OpenAI, Claude, etc.)
 
 ### Scrapers (`src/scrapers/`)
-- **amazon.py**: Product metadata extraction
-- **goodreads.py**: Reviews and ratings
-- Playwright for JavaScript rendering
-- BeautifulSoup for HTML parsing
-- Proxy rotation and rate limiting
+- **proxy_manager.py**: Rate limiting, proxy rotation, User-Agent rotation, and backoff strategies
+- **extractors.py**: HTML extraction utilities (text, price, ISBN, dates, ratings, authors, language)
+- **amazon.py**: Playwright-based product metadata extraction (ASIN, title, authors, price, rating, ISBN, pages)
+- **goodreads.py**: Goodreads search and detail scraping (ratings, reviews, metadata)
+- **web_scraper.py**: Generic website scraper for author pages and arbitrary sources (metadata, emails, social links)
+- Playwright for JavaScript rendering and robust navigation
+- BeautifulSoup for structured HTML parsing and extraction
+- Proxy rotation and rate limiting to reduce risk of IP bans
+- Celery tasks orchestrate scraping steps and update submission status
 
 ### Models (`src/models/`)
 - **schemas.py**: Pydantic input/output models
