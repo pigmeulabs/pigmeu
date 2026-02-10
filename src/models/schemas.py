@@ -16,7 +16,7 @@ class SubmissionCreate(BaseModel):
 
 class SubmissionResponse(BaseModel):
     """Schema for submission response."""
-    id: str = Field(alias="_id")
+    id: str
     title: str
     author_name: str
     amazon_url: str
@@ -50,7 +50,7 @@ class BookExtracted(BaseModel):
 
 class BookResponse(BaseModel):
     """Schema for book response."""
-    id: str = Field(alias="_id")
+    id: str
     submission_id: str
     extracted: BookExtracted
     last_updated: datetime
@@ -61,7 +61,7 @@ class BookResponse(BaseModel):
 
 class SummaryResponse(BaseModel):
     """Schema for summary response."""
-    id: str = Field(alias="_id")
+    id: str
     book_id: str
     source_url: str
     summary_text: str
@@ -81,7 +81,7 @@ class ArticleSection(BaseModel):
 
 class ArticleResponse(BaseModel):
     """Schema for article response."""
-    id: str = Field(alias="_id")
+    id: str
     book_id: str
     title: str
     content: str
@@ -114,7 +114,7 @@ class PromptCreate(BaseModel):
 
 class PromptResponse(BaseModel):
     """Schema for prompt response."""
-    id: str = Field(alias="_id")
+    id: str
     name: str
     purpose: str
     system_prompt: str

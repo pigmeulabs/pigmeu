@@ -106,21 +106,15 @@ def extract_isbn(text: str) -> Optional[str]:
         >>> extract_isbn("ISBN-13: 978-3-319-77206-2")
         '9783319772062'
     """
-    # Match 10 or 13 digit ISBN (with optional hyphens)
-    patterns = [
-        r'(?:ISBN-?13[:]?\s*)?(?=[0-9]{13}$|(?=(?:[0-9]+[- ]){3})[- 0-9]{17}$|97[89][0-9]{10}$|(?=(?:[0-9]+[- ]){4})[- 0-9]{13}$)[0-9\-]+',
-        r'\d{9}[\dXx]',  # ISBN-10
-    ]
-    
-    for pattern in patterns:
-        match = re.search(pattern, text)
-        if match:
-            # Remove hyphens and spaces
-            isbn = re.sub(r'[\s\-]', '', match.group(0))
-            # Validate length
-            if len(isbn) in [10, 13]:
-                return isbn
-    
+    # Find candidate sequences containing digits, hyphens, spaces, or X
+    for match in re.finditer(r'[\dXx\-\s]{10,20}', text):
+        candidate = re.sub(r'[\s\-]', '', match.group(0))
+        # ISBN-10 may end with X/x
+        if len(candidate) == 10 and (candidate[:-1].isdigit() and (candidate[-1].isdigit() or candidate[-1] in 'Xx')):
+            return candidate.upper()
+        if len(candidate) == 13 and candidate.isdigit():
+            return candidate
+
     return None
 
 
@@ -171,7 +165,16 @@ def extract_rating(text: str) -> Optional[float]:
         >>> extract_rating("Rating: 4.5 out of 5 stars")
         4.5
     """
-    # Look for decimal number
+    # Percentage pattern (e.g., "85%" -> 8.5 out of 10)
+    pct = re.search(r'(\d{1,3}(?:\.\d+)?)\s*%', text)
+    if pct:
+        try:
+            value = float(pct.group(1))
+            return value / 10.0
+        except ValueError:
+            pass
+
+    # Look for decimal number in "x out of y" or "x/y" patterns
     match = re.search(r'(\d+\.?\d*)\s*(?:out of|\/|-)\s*(\d+\.?\d*)', text)
     if match:
         try:
@@ -182,8 +185,8 @@ def extract_rating(text: str) -> Optional[float]:
         except ValueError:
             pass
     
-    # Just look for single decimal between 0-10
-    match = re.search(r'(\d{1,2}\.?\d*)', text)
+    # Just look for single number between 0-10
+    match = re.search(r'(\d{1,3}\.?\d*)', text)
     if match:
         try:
             rating = float(match.group(1))
@@ -195,7 +198,7 @@ def extract_rating(text: str) -> Optional[float]:
     return None
 
 
-def extract_authors(text: str) -> List[str]:
+def extract_authors(text: str, max_count: int = 5) -> List[str]:
     """Extract author names from text.
     
     Args:
@@ -224,7 +227,7 @@ def extract_authors(text: str) -> List[str]:
         if part and len(part.split()) >= 1:
             authors.append(part)
     
-    return authors[:5]  # Max 5 authors
+    return authors[:max_count]
 
 
 def extract_language(text: str) -> Optional[str]:
@@ -291,8 +294,19 @@ def clean_text(text: str, max_length: Optional[int] = None) -> str:
     # Remove special characters but keep punctuation
     text = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', text)
     
-    # Truncate if needed
+    # Truncate if needed and ensure result length <= max_length
     if max_length and len(text) > max_length:
-        text = text[:max_length].rsplit(' ', 1)[0] + '...'
+        # Reserve space for ellipsis
+        reserve = 3
+        if max_length <= reserve:
+            return text[:max_length]
+
+        truncated = text[: max_length - reserve]
+        # Try to avoid cutting a word
+        last_space = truncated.rfind(' ')
+        if last_space != -1:
+            truncated = truncated[:last_space]
+
+        text = truncated + '...'
     
     return text

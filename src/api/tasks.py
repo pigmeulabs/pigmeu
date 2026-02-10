@@ -27,7 +27,7 @@ router = APIRouter(prefix="/tasks", tags=["Tasks"])
 async def list_tasks(
     skip: int = Query(0, ge=0, description="Skip first N tasks"),
     limit: int = Query(20, ge=1, le=100, description="Max tasks to return"),
-    status: Optional[str] = Query(None, description="Filter by status"),
+    status_filter: Optional[str] = Query(None, description="Filter by status"),
     repo: SubmissionRepository = Depends(get_submission_repo),
 ):
     """List all submission tasks with pagination and filtering.
@@ -58,7 +58,7 @@ async def list_tasks(
         submissions, total = await repo.list_all(
             skip=skip,
             limit=limit,
-            status=status,
+            status=status_filter,
         )
         
         # Convert to response models
@@ -94,6 +94,20 @@ async def list_tasks(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to list tasks. Please try again.",
         )
+
+
+@router.get(
+    "/health",
+    tags=["Health"],
+    summary="Check tasks endpoint health",
+)
+async def tasks_health():
+    """Health check for tasks endpoint.
+    
+    Returns:
+        Status message
+    """
+    return {"status": "ok", "endpoint": "tasks"}
 
 
 @router.get(
@@ -233,15 +247,3 @@ async def get_task(
         )
 
 
-@router.get(
-    "/health",
-    tags=["Health"],
-    summary="Check tasks endpoint health",
-)
-async def tasks_health():
-    """Health check for tasks endpoint.
-    
-    Returns:
-        Status message
-    """
-    return {"status": "ok", "endpoint": "tasks"}

@@ -153,18 +153,22 @@ class GenericWebScraper:
         Returns:
             True if likely author website
         """
-        # Common author website patterns
-        author_patterns = [
-            r"(?:www\.)?[a-z-]+\.com",  # author.com, author-name.com
-            r"(?:www\.)?author[s]?\..*",  # authors.*, authors.*
-            r".*\.io",  # tech author sites often use .io
-            r".*\.dev",  # developer sites
-        ]
-        
-        for pattern in author_patterns:
-            if re.match(pattern, domain, re.IGNORECASE):
-                return True
-        
+        d = domain.lower()
+
+        # Heuristic rules for author sites:
+        # - contains 'author'
+        # - contains a hyphen (e.g., john-smith.com)
+        # - begins with 'blog.' or contains '.blog.'
+        # - ends with developer-friendly TLDs like .io or .dev
+        if 'author' in d:
+            return True
+        if '-' in d:
+            return True
+        if d.startswith('blog.') or '.blog.' in d:
+            return True
+        if d.endswith('.io') or d.endswith('.dev'):
+            return True
+
         return False
     
     def _extract_metadata_from_html(self, soup: BeautifulSoup) -> Dict[str, Any]:

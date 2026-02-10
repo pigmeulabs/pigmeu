@@ -6,16 +6,21 @@ with actual database operations.
 """
 
 import pytest
+import pytest
 from fastapi.testclient import TestClient
 from src.app import app
 
-client = TestClient(app)
+
+@pytest.fixture
+def client():
+    with TestClient(app) as c:
+        yield c
 
 
 class TestSubmitEndpoint:
     """Tests for POST /submit endpoint."""
     
-    def test_submit_book_success(self):
+    def test_submit_book_success(self, client):
         """Test successful book submission."""
         payload = {
             "title": "Designing Data-Intensive Applications",
@@ -40,7 +45,7 @@ class TestSubmitEndpoint:
         assert "created_at" in data
         assert "updated_at" in data
     
-    def test_submit_book_minimal(self):
+    def test_submit_book_minimal(self, client):
         """Test submission with minimal required fields."""
         payload = {
             "title": "Clean Code",
@@ -56,7 +61,7 @@ class TestSubmitEndpoint:
         assert data["goodreads_url"] is None
         assert data["author_site"] is None
     
-    def test_submit_book_invalid_url(self):
+    def test_submit_book_invalid_url(self, client):
         """Test submission with invalid URL."""
         payload = {
             "title": "Test Book",
@@ -69,7 +74,7 @@ class TestSubmitEndpoint:
         # Pydantic validation should reject invalid URL
         assert response.status_code == 422
     
-    def test_submit_book_missing_required_field(self):
+    def test_submit_book_missing_required_field(self, client):
         """Test submission with missing required field."""
         payload = {
             "title": "Test Book",
@@ -81,7 +86,7 @@ class TestSubmitEndpoint:
         
         assert response.status_code == 422
     
-    def test_submit_health(self):
+    def test_submit_health(self, client):
         """Test submit endpoint health check."""
         response = client.get("/submit/health")
         
@@ -94,7 +99,7 @@ class TestSubmitEndpoint:
 class TestTasksEndpoint:
     """Tests for /tasks endpoints."""
     
-    def test_list_tasks_empty(self):
+    def test_list_tasks_empty(self, client):
         """Test listing tasks when none exist."""
         response = client.get("/tasks")
         
@@ -109,7 +114,7 @@ class TestTasksEndpoint:
         assert "count" in data
         assert isinstance(data["tasks"], list)
     
-    def test_list_tasks_with_pagination(self):
+    def test_list_tasks_with_pagination(self, client):
         """Test listing tasks with skip/limit."""
         # Create some test submissions first
         for i in range(3):
@@ -129,14 +134,14 @@ class TestTasksEndpoint:
         assert data["skip"] == 0
         assert data["limit"] == 2
     
-    def test_list_tasks_invalid_limit(self):
+    def test_list_tasks_invalid_limit(self, client):
         """Test listing with invalid limit (>100)."""
         response = client.get("/tasks?limit=150")
         
         # Should be rejected by validation
         assert response.status_code == 422
     
-    def test_get_task_success(self):
+    def test_get_task_success(self, client):
         """Test getting task details."""
         # Create a submission first
         payload = {
@@ -167,7 +172,7 @@ class TestTasksEndpoint:
         assert "steps" in data["progress"]
         assert len(data["progress"]["steps"]) == 4
     
-    def test_get_task_not_found(self):
+    def test_get_task_not_found(self, client):
         """Test getting non-existent task."""
         response = client.get("/tasks/507f1f77bcf86cd799439011")
         
@@ -176,14 +181,14 @@ class TestTasksEndpoint:
         # but doesn't exist, so might return 404
         assert response.status_code in [404, 422]
     
-    def test_get_task_invalid_id(self):
+    def test_get_task_invalid_id(self, client):
         """Test getting task with invalid ID format."""
         response = client.get("/tasks/not-a-valid-id")
         
         # Should handle invalid ObjectId gracefully
         assert response.status_code in [404, 422]
     
-    def test_tasks_health(self):
+    def test_tasks_health(self, client):
         """Test tasks endpoint health check."""
         response = client.get("/tasks/health")
         
