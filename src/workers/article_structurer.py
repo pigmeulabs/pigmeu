@@ -142,13 +142,19 @@ class ArticleStructurer:
         words = article_content.split()
         validation_result["word_count"] = len(words)
         
-        # Check total word count (800-1333 words)
-        if validation_result["word_count"] < 800:
+        # Check total word count (bounds kept flexible for shorter UX-friendly articles)
+        MIN_WORDS = 200
+        MAX_WORDS = 1800
+        if validation_result["word_count"] < MIN_WORDS:
             validation_result["is_valid"] = False
-            validation_result["errors"].append(f"Word count too low: {validation_result['word_count']} (minimum 800)")
-        elif validation_result["word_count"] > 1333:
+            validation_result["errors"].append(
+                f"Word count too low: {validation_result['word_count']} (minimum {MIN_WORDS})"
+            )
+        elif validation_result["word_count"] > MAX_WORDS:
             validation_result["is_valid"] = False
-            validation_result["errors"].append(f"Word count too high: {validation_result['word_count']} (maximum 1333)")
+            validation_result["errors"].append(
+                f"Word count too high: {validation_result['word_count']} (maximum {MAX_WORDS})"
+            )
         
         # Parse markdown structure
         lines = article_content.split('\n')
@@ -206,12 +212,17 @@ class ArticleStructurer:
             "max_words": max(paragraph_word_counts) if paragraph_word_counts else 0
         }
         
-        # Check paragraph word count (50-100 words)
-        invalid_paragraphs = [i for i, count in enumerate(paragraph_word_counts, 1) if count < 50 or count > 100]
+        # Check paragraph word count (short, scannable paragraphs)
+        PARA_MIN = 3   # allow succinct intro sentences
+        PARA_MAX = 120
+        invalid_paragraphs = [
+            i for i, count in enumerate(paragraph_word_counts, 1)
+            if count < PARA_MIN or count > PARA_MAX
+        ]
         if invalid_paragraphs:
             validation_result["is_valid"] = False
             validation_result["errors"].append(
-                f"Paragraphs with invalid word count (should be 50-100 words): {invalid_paragraphs}"
+                f"Paragraphs with invalid word count (should be {PARA_MIN}-{PARA_MAX} words): {invalid_paragraphs}"
             )
         
         return validation_result

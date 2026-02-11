@@ -1,4 +1,4 @@
-i"""
+"""
 Test cases for ArticleStructurer.
 """
 

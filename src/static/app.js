@@ -75,7 +75,19 @@ async function fetchTasks() {
   try {
     const res = await fetch(`/tasks?skip=${skip}&limit=${limit}`);
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Failed to fetch');
+    if (!res.ok) {
+      let errorMsg = 'Failed to fetch tasks';
+      if (data.detail) {
+        if (typeof data.detail === 'string') {
+          errorMsg = data.detail;
+        } else if (Array.isArray(data.detail)) {
+          errorMsg = data.detail.map(err => `${err.loc?.[0] || 'field'}: ${err.msg}`).join('; ');
+        } else if (typeof data.detail === 'object') {
+          errorMsg = JSON.stringify(data.detail);
+        }
+      }
+      throw new Error(errorMsg);
+    }
     
     tasksGrid.innerHTML = '';
     if (!data.tasks || data.tasks.length === 0) {
@@ -117,7 +129,19 @@ async function fetchTaskDetails(id) {
   try {
     const res = await fetch(`/tasks/${id}`);
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Failed to fetch details');
+    if (!res.ok) {
+      let errorMsg = 'Failed to fetch details';
+      if (data.detail) {
+        if (typeof data.detail === 'string') {
+          errorMsg = data.detail;
+        } else if (Array.isArray(data.detail)) {
+          errorMsg = data.detail.map(err => `${err.loc?.[0] || 'field'}: ${err.msg}`).join('; ');
+        } else if (typeof data.detail === 'object') {
+          errorMsg = JSON.stringify(data.detail);
+        }
+      }
+      throw new Error(errorMsg);
+    }
     
     const sub = data.submission;
     let html = `<h3>${sub.title}</h3>`;
@@ -198,7 +222,19 @@ async function fetchTaskDetails(id) {
           body: JSON.stringify(payload)
         });
         const r = await res.json();
-        if (!res.ok) throw new Error(r.detail || 'Failed to save');
+        if (!res.ok) {
+          let errorMsg = 'Failed to save';
+          if (r.detail) {
+            if (typeof r.detail === 'string') {
+              errorMsg = r.detail;
+            } else if (Array.isArray(r.detail)) {
+              errorMsg = r.detail.map(err => `${err.loc?.[0] || 'field'}: ${err.msg}`).join('; ');
+            } else if (typeof r.detail === 'object') {
+              errorMsg = JSON.stringify(r.detail);
+            }
+          }
+          throw new Error(errorMsg);
+        }
         fetchTaskDetails(id);
       } catch (err) {
         alert('Error saving: ' + err.message);
@@ -209,7 +245,19 @@ async function fetchTaskDetails(id) {
       try {
         const res = await fetch(`/tasks/${id}/generate_context`, { method: 'POST' });
         const r = await res.json();
-        if (!res.ok) throw new Error(r.detail || 'Failed');
+        if (!res.ok) {
+          let errorMsg = 'Failed';
+          if (r.detail) {
+            if (typeof r.detail === 'string') {
+              errorMsg = r.detail;
+            } else if (Array.isArray(r.detail)) {
+              errorMsg = r.detail.map(err => `${err.loc?.[0] || 'field'}: ${err.msg}`).join('; ');
+            } else if (typeof r.detail === 'object') {
+              errorMsg = JSON.stringify(r.detail);
+            }
+          }
+          throw new Error(errorMsg);
+        }
         alert('Context generation enqueued');
         setTimeout(() => fetchTaskDetails(id), 2000);
       } catch (err) {
@@ -221,7 +269,19 @@ async function fetchTaskDetails(id) {
       try {
         const res = await fetch(`/tasks/${id}/generate_article`, { method: 'POST' });
         const r = await res.json();
-        if (!res.ok) throw new Error(r.detail || 'Failed');
+        if (!res.ok) {
+          let errorMsg = 'Failed';
+          if (r.detail) {
+            if (typeof r.detail === 'string') {
+              errorMsg = r.detail;
+            } else if (Array.isArray(r.detail)) {
+              errorMsg = r.detail.map(err => `${err.loc?.[0] || 'field'}: ${err.msg}`).join('; ');
+            } else if (typeof r.detail === 'object') {
+              errorMsg = JSON.stringify(r.detail);
+            }
+          }
+          throw new Error(errorMsg);
+        }
         alert('Article generation enqueued');
         setTimeout(() => fetchTaskDetails(id), 2000);
       } catch (err) {
@@ -261,7 +321,23 @@ submitForm.addEventListener('submit', async (ev) => {
       body: JSON.stringify(body),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Submission failed');
+    if (!res.ok) {
+      // Handle different error types
+      let errorMsg = 'Submission failed';
+      if (data.detail) {
+        if (typeof data.detail === 'string') {
+          errorMsg = data.detail;
+        } else if (Array.isArray(data.detail)) {
+          // Pydantic validation errors
+          errorMsg = data.detail.map(err => 
+            `${err.loc?.[0] || 'field'}: ${err.msg}`
+          ).join('; ');
+        } else if (typeof data.detail === 'object') {
+          errorMsg = JSON.stringify(data.detail);
+        }
+      }
+      throw new Error(errorMsg);
+    }
     submitResult.textContent = `✓ Submitted! Task ID: ${data.id}`;
     submitResult.className = 'form-result success';
     submitForm.reset();
@@ -326,7 +402,21 @@ credForm.addEventListener('submit', async (ev) => {
       body: JSON.stringify(body)
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Failed');
+    if (!res.ok) {
+      let errorMsg = 'Failed to save credential';
+      if (data.detail) {
+        if (typeof data.detail === 'string') {
+          errorMsg = data.detail;
+        } else if (Array.isArray(data.detail)) {
+          errorMsg = data.detail.map(err => 
+            `${err.loc?.[0] || 'field'}: ${err.msg}`
+          ).join('; ');
+        } else if (typeof data.detail === 'object') {
+          errorMsg = JSON.stringify(data.detail);
+        }
+      }
+      throw new Error(errorMsg);
+    }
     credResult.textContent = `✓ Credential saved: ${data.id}`;
     credResult.className = 'form-result success';
     credForm.reset();
@@ -390,7 +480,21 @@ promptForm.addEventListener('submit', async (ev) => {
       body: JSON.stringify(body)
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Failed');
+    if (!res.ok) {
+      let errorMsg = 'Failed to save prompt';
+      if (data.detail) {
+        if (typeof data.detail === 'string') {
+          errorMsg = data.detail;
+        } else if (Array.isArray(data.detail)) {
+          errorMsg = data.detail.map(err => 
+            `${err.loc?.[0] || 'field'}: ${err.msg}`
+          ).join('; ');
+        } else if (typeof data.detail === 'object') {
+          errorMsg = JSON.stringify(data.detail);
+        }
+      }
+      throw new Error(errorMsg);
+    }
     promptResult.textContent = `✓ Prompt saved: ${data.id}`;
     promptResult.className = 'form-result success';
     promptForm.reset();
