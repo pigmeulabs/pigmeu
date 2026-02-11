@@ -1,0 +1,483 @@
+# PIGMEU COPILOT - Article Generation Configuration
+# Parametrização normalizada baseada em análise de 7 artigos do blog analisederequisitos.com.br
+# Versão: 1.0
+# Data: 2024-11-20
+
+# ============================================================================
+# ARTICLE STRUCTURE - Estrutura de Artigos
+# ============================================================================
+article_structure:
+  # Hierarquia de títulos (heading levels)
+  heading_hierarchy:
+    h1:
+      count: 1
+      position: "top"
+      format: "[LIVRO/GUIA]: [Título em português] - [Subtítulo explicativo]"
+      example: "Livro \"The Design Sprint: O método usado pelo Google\" (PDF)"
+    
+    h2:
+      count: 2-4
+      max_per_article: 5
+      position: "main_sections"
+      format: "Descriptive section title in Portuguese"
+      examples:
+        - "Conteúdo do livro"
+        - "O que é o Guia Ágil"
+        - "Estrutura do Sprint"
+        - "Sobre os autores"
+        - "Detalhes do livro"
+    
+    h3:
+      count: 3-8
+      max_per_article: 15
+      position: "subsections"
+      format: "Specific topic or chapter title"
+      examples:
+        - "Compreensão do método Sprint"
+        - "Reciprocidade: A Dinâmica da Troca"
+        - "Jake Knapp"
+        - "Os 5 grupos de processo"
+
+  # Seç ões obrigatórias
+  required_sections:
+    - name: "introduction"
+      h_level: 1
+      position: "start"
+      content_type: "mixed" # texto + metadados
+      description: "Apresentação do livro e contexto"
+    
+    - name: "table_of_contents"
+      h_level: 2
+      position: "after_intro"
+      content_type: "text"
+      format: "Você vai ler nesse artigo: [bulleted list]"
+      description: "Sumário interno com links"
+    
+    - name: "main_content"
+      h_level: 2
+      position: "middle"
+      content_type: "mixed"
+      description: "Conteúdo principal (pode ter múltiplas seções H2 e H3)"
+    
+    - name: "about_author"
+      h_level: 2
+      position: "near_end"
+      content_type: "text"
+      description: "Informações do autor do livro"
+    
+    - name: "book_details"
+      h_level: 2
+      position: "near_end"
+      content_type: "structured"
+      format: |
+        • Título: ...
+        • Autor: ...
+        • Editora: ...
+        • Data: ...
+        • Páginas: ...
+        • ISBN: ...
+      description: "Metadados tipo tabela"
+    
+    - name: "download_cta"
+      h_level: 2
+      position: "end"
+      content_type: "call_to_action"
+      format: "Download [LIVRO/GUIA] em PDF"
+      description: "Chamada para ação - download"
+    
+    - name: "related_content"
+      h_level: 2
+      position: "very_end"
+      content_type: "links"
+      format: "Explore / Saiba mais sobre / Artigos relacionados"
+      description: "Links para conteúdo relacionado"
+
+  # Número de palavras por seção
+  word_count_targets:
+    introduction: 150-250
+    table_of_contents: 20-50
+    main_content_per_h2: 300-600
+    subsection_h3: 100-250
+    about_author: 150-300
+    book_details: 100-150
+    download_cta: 50-100
+    total_article: 2000-3500
+
+# ============================================================================
+# TONE & VOICE - Tom e Voz
+# ============================================================================
+tone_and_voice:
+  language: "Português Brasileiro"
+  register: "professional_educational"
+  
+  characteristics:
+    - "Profissional mas acessível"
+    - "Educativo sem ser condescendente"
+    - "Bem informado (especialista)"
+    - "Prático e acionável"
+    - "Persuasivo mas ético"
+    - "Amigável com apelo emocional"
+
+  phrases_to_use:
+    motivational:
+      - "Descobra como..."
+      - "Transforme sua..."
+      - "Aprenda com..."
+      - "Prepare-se para..."
+    
+    authority:
+      - "especialista em..."
+      - "vasta experiência em..."
+      - "reconhecido por..."
+      - "conhecimento prático de..."
+    
+    urgency_soft:
+      - "essencial para..."
+      - "crucial para..."
+      - "fundamental para..."
+    
+    benefits:
+      - "aumentar as chances de sucesso"
+      - "impulsionar seus resultados"
+      - "alcançar seus objetivos"
+      - "transformar sua abordagem"
+
+  phrases_to_avoid:
+    - "Apenas..."
+    - "Tem que..."
+    - "Deve ser..."
+    - Overselling language
+    - Clickbait patterns
+
+  sentence_structure:
+    avg_length_words: 15-20
+    variety: "Mix of short punchy + longer explanatory"
+    complexity: "intermediate"
+    
+  paragraph_style:
+    avg_length_lines: 3-5
+    opening: "Hook or topic sentence"
+    structure: "Topic + Explanation + Example/Benefit"
+    variety: "Some single-line paragraphs for emphasis"
+
+# ============================================================================
+# LINKING STRATEGY - Estratégia de Links
+# ============================================================================
+linking_strategy:
+  internal_links:
+    quantity: 8-15
+    placement: "distributed throughout"
+    anchor_text_style: "descriptive_keywords"
+    target_pages: "related_content_on_blog"
+    examples:
+      - "[método Sprint](https://analisederequisitos.com.br/tag/metodo-sprint/)"
+      - "[Scrum](https://analisederequisitos.com.br/scrum-board-modelo-exemplo/)"
+      - "[análise de requisitos](https://analisederequisitos.com.br/)"
+  
+  external_links:
+    quantity: 3-8
+    types:
+      - "Amazon for book purchase"
+      - "Goodreads for ratings"
+      - "Publisher official links"
+    placement: "in content + book details section"
+    authority: "high"
+  
+  book_store_links:
+    amazon: "https://www.amazon.com.br/..."
+    livraria_cultura: "https://www.livrariacultura.com.br/..."
+    goodreads: "https://www.goodreads.com/..."
+  
+  cta_links:
+    download: "Link para PDF (com autenticação)"
+    related_articles: "3-5 related article links"
+    author_profile: "Link para página do autor no blog"
+
+# ============================================================================
+# FORMATTING RULES - Estilos de Formatação
+# ============================================================================
+formatting_rules:
+  emphasis:
+    bold:
+      usage: "Key concepts, section keywords, benefits"
+      frequency: "2-4 per main section"
+      example: "**Método Sprint** permite que equipes..."
+    
+    italic:
+      usage: "Book titles, foreign terms, emphasis"
+      frequency: "1-2 per section"
+      example: "*Design Thinking* é a base do método"
+    
+    code_blocks:
+      usage: "Technical terms, configuration examples (rare for book reviews)"
+      frequency: "0-2 per article"
+  
+  lists:
+    bullet_points:
+      usage: "Features, benefits, characteristics, steps"
+      frequency: "2-4 per main section"
+      format: "• Item one\n• Item two"
+      max_items: 7 per list
+    
+    numbered_lists:
+      usage: "Sequential steps, process phases"
+      frequency: "1-3 per article"
+      example: "1. Fase 1\n2. Fase 2\n3. Fase 3"
+  
+  images:
+    count: 2-4
+    types:
+      - "Book cover"
+      - "Book screenshot/excerpt"
+      - "Author photo (if available)"
+    placement:
+      - "After introduction"
+      - "In about_author section"
+      - "In book_details section"
+    captions: "Descriptive Portuguese captions"
+  
+  blockquotes:
+    usage: "Author insights, key takeaways"
+    frequency: "0-1 per article"
+    format: "> Citation or important quote"
+  
+  horizontal_lines:
+    usage: "Section separators (sparingly)"
+    frequency: "0-2 per article"
+
+# ============================================================================
+# SEO & METADATA - SEO e Metadados
+# ============================================================================
+seo_metadata:
+  title_format: "[Livro/Guia] \"[Nome]\" (PDF) - [Benefício/Descrição]"
+  title_length: 50-60
+  
+  slug_format: "livro-[título-em-minúsculas-com-hífens]"
+  slug_examples:
+    - "livro-design-sprint-metodo-google-pdf"
+    - "guia-agil-pmi"
+    - "livro-scrum-kanban-e-scrumban"
+  
+  meta_description_length: 155-160
+  meta_description_format: "Discover how [book/guide] by [author] can [benefit]. Download PDF free and learn [key_takeaway]."
+  
+  keywords:
+    primary: 1
+    format: "[livro/guia] [título]"
+  
+  secondary_keywords: 5-8
+    examples:
+      - "PDF download"
+      - "agile methodology"
+      - "project management"
+      - "software requirements"
+  
+  categories: ["LIVROS E DOWNLOADS"]
+  tags: 5-10
+    examples:
+      - "metodologia ágil"
+      - "gerenciamento de projetos"
+      - "desenvolvimento de software"
+      - "agile"
+      - "[specific_methodology]"
+
+# ============================================================================
+# CONTENT PATTERNS - Padrões de Conteúdo
+# ============================================================================
+content_patterns:
+  introduction_pattern:
+    - "Hook: Why this book matters"
+    - "About the book: title, author, publication"
+    - "What it covers: brief overview"
+    - "Who should read: target audience"
+    - "Value proposition: what reader will learn"
+  
+  main_content_pattern:
+    - "Topic introduction (what is/why matters)"
+    - "Key concept explanation"
+    - "Practical example or case study"
+    - "Implementation tips"
+    - "Connection to other concepts"
+  
+  author_pattern:
+    - "Name and expertise"
+    - "Professional background"
+    - "Relevant experience"
+    - "Key achievements"
+    - "Social links (if available)"
+  
+  book_details_pattern:
+    - "Title (Portuguese + Original)"
+    - "Author(s)"
+    - "Publisher"
+    - "Year/Edition"
+    - "Page count"
+    - "ISBN"
+    - "Links to purchase/Goodreads"
+  
+  cta_pattern:
+    - "Value reinforcement"
+    - "Action statement"
+    - "Download link (with login requirement)"
+    - "Alternative purchase links"
+
+# ============================================================================
+# CALL-TO-ACTION (CTA) - Chamadas para Ação
+# ============================================================================
+cta_strategy:
+  primary_cta:
+    type: "download"
+    text: "Baixe o [LIVRO/GUIA] em PDF"
+    position: "dedicated_section_before_credentials"
+    emphasis: "high"
+  
+  secondary_ctas:
+    - type: "purchase"
+      text: "Compre na Amazon"
+      link_to: "amazon.com.br"
+    
+    - type: "purchase"
+      text: "Compre na Livraria Cultura"
+      link_to: "livrariacultura.com.br"
+    
+    - type: "explore"
+      text: "Veja mais artigos relacionados"
+      link_to: "related_blog_posts"
+  
+  donation_cta:
+    position: "side_panel_and_end_of_content"
+    text: "AJUDE COM UM PIX - Seu apoio é fundamental!"
+    description: "Emotional appeal for support"
+  
+  cta_frequency:
+    per_article: 1-2 main CTAs
+    distribution: "spread throughout"
+
+# ============================================================================
+# PUBLISHING METADATA - Metadados de Publicação
+# ============================================================================
+publishing:
+  author_byline: "Francilvio Roberto Alff (Chico Alff)"
+  author_page: "https://analisederequisitos.com.br/autor/chicoalff/"
+  category: "LIVROS E DOWNLOADS"
+  featured_image_size: "780x470"
+  
+  publication_components:
+    author_card: true
+    author_bio: true
+    related_posts: true
+    donation_cta: true
+    tags_section: true
+    comments_section: false
+    
+  image_formats:
+    featured: "JPEG optimized 780x470"
+    inline: "JPEG/PNG optimized for mobile"
+  
+  update_pattern:
+    initial_publication: "date"
+    last_update: "date"
+    update_frequency: "as needed when book info changes"
+
+# ============================================================================
+# TONE MATRIX - Matriz de Variação de Tom
+# ============================================================================
+tone_variation:
+  # Based on book complexity and audience
+  technical_books:
+    tone_level: "formal_technical"
+    examples: ["PMBOK", "Agile Software Requirements"]
+    characteristics:
+      - More structured
+      - More terminology
+      - More process-focused
+  
+  methodology_books:
+    tone_level: "professional_practical"
+    examples: ["Design Sprint", "Scrum Kanban Scrumban"]
+    characteristics:
+      - Balanced formal/accessible
+      - Real-world examples
+      - Step-by-step guidance
+  
+  business_psychology_books:
+    tone_level: "persuasive_engaging"
+    examples: ["Gatilhos Mentais"]
+    characteristics:
+      - More emotional appeal
+      - More practical examples
+      - More conversational
+
+# ============================================================================
+# VALIDATION RULES - Regras de Validação
+# ============================================================================
+validation_rules:
+  structure:
+    - "Must have exactly 1 H1"
+    - "Must have 2-4 H2 sections"
+    - "Must have 3-8 H3 subsections"
+    - "All required_sections must be present"
+  
+  content:
+    - "Total word count: 2000-3500"
+    - "No section shorter than min_words"
+    - "Description length: 50-160 chars"
+  
+  links:
+    - "Internal links: 8-15 total"
+    - "External links: 3-8 total"
+    - "All links functional"
+  
+  formatting:
+    - "No more than 1 H1"
+    - "Consistent heading hierarchy"
+    - "At least 1 list per main section"
+    - "At least 2 images"
+  
+  language:
+    - "Portuguese Brazilian"
+    - "No English sentences (only where necessary)"
+    - "Consistent terminology"
+
+# ============================================================================
+# EXAMPLES & TEMPLATES
+# ============================================================================
+template_article_metadata:
+  title: "Livro \"[TÍTULO EM PORTUGUÊS]: [SUBTÍTULO]\" (PDF)"
+  slug: "livro-[titulo-em-hifens]"
+  excerpt: |
+    [LIVRO] é uma obra essencial para profissionais que desejam 
+    [BENEFÍCIO PRINCIPAL]. Com [PRINCIPAIS CARACTERÍSTICAS], 
+    este guia oferece [VALOR FINAL].
+  
+  featured_image: "[path_to_book_cover]"
+  author: "Francilvio Roberto Alff"
+  category: "LIVROS E DOWNLOADS"
+  tags:
+    - "livros"
+    - "[método/área específica]"
+    - "agile/gerenciamento"
+  
+  seo_title: "[Livro/Guia] \"[Nome]\" (PDF) - [Benefício]"
+  seo_description: |
+    Discover [livro/guia] by [author] covering [tópico principal]. 
+    Learn [benefício chave]. Download PDF free and master 
+    [skill/knowledge area]. [CTA].
+
+# ============================================================================
+# VERSION & MAINTENANCE
+# ============================================================================
+metadata:
+  version: "1.0"
+  created_date: "2024-11-20"
+  last_updated: "2024-11-20"
+  author: "PIGMEU Copilot"
+  sources:
+    - "https://analisederequisitos.com.br/gestao-de-produtos-de-software/"
+    - "https://analisederequisitos.com.br/pmbok-5/"
+    - "https://analisederequisitos.com.br/livro-design-sprint-metodo-google-pdf/"
+    - "https://analisederequisitos.com.br/livro-scrum-kanban-e-scrumban/"
+    - "https://analisederequisitos.com.br/livro-agile-software-requirements/"
+    - "https://analisederequisitos.com.br/livro-gatilhos-mentais/"
+    - "https://analisederequisitos.com.br/guia-agil-pmi/"
+  analysis_notes: "Pattern analysis of 7 blog articles from analisederequisitos.com.br"
