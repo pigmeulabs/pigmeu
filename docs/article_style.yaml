@@ -1,0 +1,178 @@
+# Template de parametrização para artigos de review/download
+# Blog: analisederequisitos.com.br
+
+brand: analisederequisitos
+site_url: https://analisederequisitos.com.br
+language: pt-BR
+
+persona:
+  author_name: "Francilvio Roberto Alff"
+  person: "2a pessoa (você)"
+  tone: "didático, entusiasmado, acolhedor"
+  register: "informal-polido"
+  vocabulary: "simples, metáforas leves e comparações com cotidiano ou cultura pop (ex.: mestre Jedi)"
+  cadence: "parágrafos curtos (2-4 frases) com variação de ritmo e interjeições positivas"
+
+structure:
+  hero:
+    breadcrumbs: true
+    show_cover_image: true
+    show_subtitle: true
+    show_author: true
+    show_dates: true          # data original + última atualização
+    download_cta_after_intro: true
+  toc:
+    enabled: true
+    label: "Você vai ler nesse artigo:"
+    anchor_links: true
+  sections_order:
+    - intro
+    - main_topic
+    - author
+    - download
+    - donation
+    - login_cta
+    - related
+    - tags
+    - author_bio
+  sections:
+    intro:
+      heading: null           # abre com parágrafo direto
+      paragraphs: 1-2
+      include_why_read: true
+      include_hook_metaphor: true
+      highlight_benefit: true
+    main_topic:
+      heading_template: "{titulo}"
+      subheadings:
+        - "O que é {titulo_curto}"
+        - "Conteúdo do {titulo_curto}"
+        - "Os 5 grupos de processo"
+        - "As 10 áreas do conhecimento"
+      bullet_summaries: true
+      numbered_lists_for_steps: true
+      include_examples_every_section: true
+    author:
+      heading: "Autor do livro"
+      paragraphs: 1-2
+      include_roles: true
+      include_current_position: true
+      include_photo_caption: true
+    download:
+      heading: "Download do livro"
+      cta_text: "Baixe agora"
+      gating: login_required
+      include_legality_note: true
+      anchor_id: "download"
+    donation:
+      heading: "⚠️ URGENTE: SEM SUA DOAÇÃO, SAIREMOS DO AR"
+      include_pix: true
+      donation_amounts: [5, 10, 20]
+      pix_label: "DOE VIA PIX (Copiar chave)"
+    login_cta:
+      heading: "FAÇA LOGIN OU CADASTRE-SE GRATUITAMENTE"
+      buttons:
+        - "Continuar com Google"
+        - "Continuar com LinkedIn"
+    related:
+      heading: "Mais livros e downloads relacionados"
+      min_items: 4
+      include_topic_sentence: true
+    tags:
+      heading: "Etiquetas"
+      format: inline_list
+    author_bio:
+      heading: "Sobre o autor"
+      include_links:
+        - website
+        - linkedin
+        - social
+
+formatting:
+  headings:
+    h1: "Título do livro/guia"
+    h2_download: "Download do livro"
+    h2_donation: "⚠️ URGENTE: SEM SUA DOAÇÃO, SAIREMOS DO AR"
+    h2_login: "FAÇA LOGIN OU CADASTRE-SE GRATUITAMENTE"
+    keep_uppercase_for_alerts: true
+  paragraphs:
+    length_sentences: 2-4
+    avoid_long_blocks: true
+  bullets: "hífen para listas; numerais para processos"
+  tone_markers:
+    use_emphasis: true
+    add_cta_exclamation: true
+  link_style:
+    include_internal_download_anchor: true
+    toc_uses_heading_ids: true
+  seo:
+    meta_description_chars: "150-180"
+    slug_pattern: "{tema}-{edicao?-ano?}"
+    canonical_host: "analisederequisitos.com.br"
+  assets:
+    cover_image_required: true
+    image_alt_template: "{titulo} - capa"
+    author_photo_optional: true
+  data_fields:
+    required:
+      - titulo
+      - titulo_curto
+      - subtitulo
+      - autor
+      - edicao
+      - publicacao_ano
+      - published_at
+      - updated_at
+      - download_url
+      - cover_image_url
+      - categoria
+      - tags
+    optional:
+      - pix_key
+      - related_links
+      - cta_secondary
+  constraints:
+    avoid:
+      - "jargão pesado"
+      - "parágrafos longos"
+    keep_person: "2a pessoa"
+    reading_level: intermediario
+
+cta_texts:
+  download: "Baixe agora"
+  donation_heading: "⚠️ URGENTE: SEM SUA DOAÇÃO, SAIREMOS DO AR"
+  donation_body_hint: "Explique urgência e inclua chave PIX"
+  login: "FAÇA LOGIN OU CADASTRE-SE GRATUITAMENTE"
+  login_buttons:
+    - "Continuar com Google"
+    - "Continuar com LinkedIn"
+
+prompts:
+  context_builder:
+    system: |
+      Você é redator do blog Analise de Requisitos. Respeite o yaml de estilo, mantenha voz em 2a pessoa e tom didático/entusiasmado.
+    user_template: |
+      Gere contexto resumido do livro/guia usando os dados:
+      - título: {titulo}
+      - autor: {autor}
+      - edição: {edicao}
+      - ano: {publicacao_ano}
+      Produza 4-6 bullets claros, inclua 1 metáfora leve e um gancho de benefício.
+  article_generator:
+    system: |
+      Produza artigo completo seguindo o estilo do yaml. Preserve TOC, CTAs (download, doação, login), seções na ordem configurada e voz em 2a pessoa.
+    user_template: |
+      Construa o artigo com base no conhecimento_base e dados estruturados.
+      Use headings H2/H3 conforme seções.
+      Inclua bloco de download ancorado, bloco de doação com PIX, bloco de login, relacionados e etiquetas.
+      Respeite o tamanho de parágrafos e use listas quando apresentar processos ou áreas.
+  formatter_rules:
+    insert_toc: true
+    toc_label: "Você vai ler nesse artigo:"
+    ensure_headings_hierarchy: true
+    wrap_download_cta_in_anchor: true
+    inject_donation_block: true
+    inject_login_block: true
+    inject_related_links_placeholder: "{{related_links}}"
+    append_tags_block: true
+    append_author_bio: true
