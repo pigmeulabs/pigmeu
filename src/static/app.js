@@ -25,6 +25,47 @@ let skip = 0;
 const limit = 10;
 let currentTaskId = null;
 
+function safeStringify(value, fallback = '[unserializable object]') {
+  try {
+    return JSON.stringify(value);
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function formatValidationError(err) {
+  if (typeof err === 'string') return err;
+  if (!err || typeof err !== 'object') return String(err);
+
+  const loc = Array.isArray(err.loc)
+    ? err.loc.filter((part) => part !== 'body').join('.')
+    : '';
+  const msg = err.msg || err.message || safeStringify(err);
+  return loc ? `${loc}: ${msg}` : msg;
+}
+
+function parseApiError(payload, fallback = 'Request failed') {
+  const detail = payload?.detail;
+  if (!detail) return fallback;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    const message = detail.map(formatValidationError).join('; ');
+    return message || fallback;
+  }
+  if (typeof detail === 'object') return safeStringify(detail);
+  return String(detail);
+}
+
+function normalizeError(err, fallback = 'Unexpected error') {
+  if (err instanceof Error && err.message) return err.message;
+  if (typeof err === 'string' && err) return err;
+  if (err && typeof err === 'object') {
+    if (typeof err.message === 'string' && err.message) return err.message;
+    return safeStringify(err);
+  }
+  return fallback;
+}
+
 // ===== Navigation =====
 function showSection(sectionId) {
   sections.forEach(s => s.classList.remove('active'));
@@ -74,19 +115,9 @@ async function fetchTasks() {
   tasksGrid.innerHTML = '<div class="loading">Loading tasks...</div>';
   try {
     const res = await fetch(`/tasks?skip=${skip}&limit=${limit}`);
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      let errorMsg = 'Failed to fetch tasks';
-      if (data.detail) {
-        if (typeof data.detail === 'string') {
-          errorMsg = data.detail;
-        } else if (Array.isArray(data.detail)) {
-          errorMsg = data.detail.map(err => `${err.loc?.[0] || 'field'}: ${err.msg}`).join('; ');
-        } else if (typeof data.detail === 'object') {
-          errorMsg = JSON.stringify(data.detail);
-        }
-      }
-      throw new Error(errorMsg);
+      throw new Error(parseApiError(data, 'Failed to fetch tasks'));
     }
     
     tasksGrid.innerHTML = '';
@@ -117,7 +148,7 @@ async function fetchTasks() {
     prevBtn.disabled = data.skip <= 0;
     nextBtn.disabled = data.skip + data.count >= data.total;
   } catch (err) {
-    tasksGrid.innerHTML = `<div class="loading">Error: ${err.message}</div>`;
+    tasksGrid.innerHTML = `<div class="loading">Error: ${normalizeError(err, 'Failed to fetch tasks')}</div>`;
     paginationInfo.textContent = '';
   }
 }
@@ -128,19 +159,9 @@ async function fetchTaskDetails(id) {
   
   try {
     const res = await fetch(`/tasks/${id}`);
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      let errorMsg = 'Failed to fetch details';
-      if (data.detail) {
-        if (typeof data.detail === 'string') {
-          errorMsg = data.detail;
-        } else if (Array.isArray(data.detail)) {
-          errorMsg = data.detail.map(err => `${err.loc?.[0] || 'field'}: ${err.msg}`).join('; ');
-        } else if (typeof data.detail === 'object') {
-          errorMsg = JSON.stringify(data.detail);
-        }
-      }
-      throw new Error(errorMsg);
+      throw new Error(parseApiError(data, 'Failed to fetch details'));
     }
     
     const sub = data.submission;
@@ -221,75 +242,45 @@ async function fetchTaskDetails(id) {
           headers: {'Content-Type':'application/json'},
           body: JSON.stringify(payload)
         });
-        const r = await res.json();
+        const r = await res.json().catch(() => ({}));
         if (!res.ok) {
-          let errorMsg = 'Failed to save';
-          if (r.detail) {
-            if (typeof r.detail === 'string') {
-              errorMsg = r.detail;
-            } else if (Array.isArray(r.detail)) {
-              errorMsg = r.detail.map(err => `${err.loc?.[0] || 'field'}: ${err.msg}`).join('; ');
-            } else if (typeof r.detail === 'object') {
-              errorMsg = JSON.stringify(r.detail);
-            }
-          }
-          throw new Error(errorMsg);
+          throw new Error(parseApiError(r, 'Failed to save'));
         }
         fetchTaskDetails(id);
       } catch (err) {
-        alert('Error saving: ' + err.message);
+        alert('Error saving: ' + normalizeError(err, 'Failed to save'));
       }
     });
 
     document.getElementById('generate-context').addEventListener('click', async () => {
       try {
         const res = await fetch(`/tasks/${id}/generate_context`, { method: 'POST' });
-        const r = await res.json();
+        const r = await res.json().catch(() => ({}));
         if (!res.ok) {
-          let errorMsg = 'Failed';
-          if (r.detail) {
-            if (typeof r.detail === 'string') {
-              errorMsg = r.detail;
-            } else if (Array.isArray(r.detail)) {
-              errorMsg = r.detail.map(err => `${err.loc?.[0] || 'field'}: ${err.msg}`).join('; ');
-            } else if (typeof r.detail === 'object') {
-              errorMsg = JSON.stringify(r.detail);
-            }
-          }
-          throw new Error(errorMsg);
+          throw new Error(parseApiError(r, 'Failed to enqueue context generation'));
         }
         alert('Context generation enqueued');
         setTimeout(() => fetchTaskDetails(id), 2000);
       } catch (err) {
-        alert('Error: ' + err.message);
+        alert('Error: ' + normalizeError(err, 'Failed to enqueue context generation'));
       }
     });
 
     document.getElementById('generate-article').addEventListener('click', async () => {
       try {
         const res = await fetch(`/tasks/${id}/generate_article`, { method: 'POST' });
-        const r = await res.json();
+        const r = await res.json().catch(() => ({}));
         if (!res.ok) {
-          let errorMsg = 'Failed';
-          if (r.detail) {
-            if (typeof r.detail === 'string') {
-              errorMsg = r.detail;
-            } else if (Array.isArray(r.detail)) {
-              errorMsg = r.detail.map(err => `${err.loc?.[0] || 'field'}: ${err.msg}`).join('; ');
-            } else if (typeof r.detail === 'object') {
-              errorMsg = JSON.stringify(r.detail);
-            }
-          }
-          throw new Error(errorMsg);
+          throw new Error(parseApiError(r, 'Failed to enqueue article generation'));
         }
         alert('Article generation enqueued');
         setTimeout(() => fetchTaskDetails(id), 2000);
       } catch (err) {
-        alert('Error: ' + err.message);
+        alert('Error: ' + normalizeError(err, 'Failed to enqueue article generation'));
       }
     });
   } catch (err) {
-    modalContent.innerHTML = `<div style="padding:20px;"><p class="error">Error: ${err.message}</p></div>`;
+    modalContent.innerHTML = `<div style="padding:20px;"><p class="error">Error: ${normalizeError(err, 'Failed to fetch details')}</p></div>`;
   }
 }
 
@@ -301,6 +292,11 @@ submitForm.addEventListener('submit', async (ev) => {
   
   const formData = new FormData(submitForm);
   const body = Object.fromEntries(formData.entries());
+  ['goodreads_url', 'author_site'].forEach((field) => {
+    if (typeof body[field] === 'string' && body[field].trim() === '') {
+      delete body[field];
+    }
+  });
   
   // Validation
   if (!body.title || !body.author_name || !body.amazon_url) {
@@ -320,30 +316,16 @@ submitForm.addEventListener('submit', async (ev) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      // Handle different error types
-      let errorMsg = 'Submission failed';
-      if (data.detail) {
-        if (typeof data.detail === 'string') {
-          errorMsg = data.detail;
-        } else if (Array.isArray(data.detail)) {
-          // Pydantic validation errors
-          errorMsg = data.detail.map(err => 
-            `${err.loc?.[0] || 'field'}: ${err.msg}`
-          ).join('; ');
-        } else if (typeof data.detail === 'object') {
-          errorMsg = JSON.stringify(data.detail);
-        }
-      }
-      throw new Error(errorMsg);
+      throw new Error(parseApiError(data, 'Submission failed'));
     }
     submitResult.textContent = `✓ Submitted! Task ID: ${data.id}`;
     submitResult.className = 'form-result success';
     submitForm.reset();
     setTimeout(() => { skip = 0; fetchTasks(); }, 1000);
   } catch (err) {
-    submitResult.textContent = `✗ Error: ${err.message}`;
+    submitResult.textContent = `✗ Error: ${normalizeError(err, 'Submission failed')}`;
     submitResult.className = 'form-result error';
   }
 });
@@ -358,7 +340,10 @@ async function fetchCredentials() {
   credList.innerHTML = '<li class="loading">Loading...</li>';
   try {
     const res = await fetch('/settings/credentials');
-    const items = await res.json();
+    const items = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(parseApiError(items, 'Failed to fetch credentials'));
+    }
     credList.innerHTML = '';
     if (items.length === 0) {
       credList.innerHTML = '<li class="empty-state">No credentials saved yet</li>';
@@ -375,14 +360,15 @@ async function fetchCredentials() {
           if (res.ok) {
             fetchCredentials();
           } else {
-            alert('Delete failed');
+            const data = await res.json().catch(() => ({}));
+            alert('Delete failed: ' + parseApiError(data, 'Delete failed'));
           }
         });
         credList.appendChild(li);
       });
     }
   } catch (err) {
-    credList.innerHTML = `<li class="empty-state">Error: ${err.message}</li>`;
+    credList.innerHTML = `<li class="empty-state">Error: ${normalizeError(err, 'Failed to fetch credentials')}</li>`;
   }
 }
 
@@ -401,28 +387,16 @@ credForm.addEventListener('submit', async (ev) => {
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify(body)
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      let errorMsg = 'Failed to save credential';
-      if (data.detail) {
-        if (typeof data.detail === 'string') {
-          errorMsg = data.detail;
-        } else if (Array.isArray(data.detail)) {
-          errorMsg = data.detail.map(err => 
-            `${err.loc?.[0] || 'field'}: ${err.msg}`
-          ).join('; ');
-        } else if (typeof data.detail === 'object') {
-          errorMsg = JSON.stringify(data.detail);
-        }
-      }
-      throw new Error(errorMsg);
+      throw new Error(parseApiError(data, 'Failed to save credential'));
     }
     credResult.textContent = `✓ Credential saved: ${data.id}`;
     credResult.className = 'form-result success';
     credForm.reset();
     fetchCredentials();
   } catch (err) {
-    credResult.textContent = `✗ Error: ${err.message}`;
+    credResult.textContent = `✗ Error: ${normalizeError(err, 'Failed to save credential')}`;
     credResult.className = 'form-result error';
   }
 });
@@ -432,7 +406,10 @@ async function fetchPrompts() {
   promptList.innerHTML = '<li class="loading">Loading...</li>';
   try {
     const res = await fetch('/settings/prompts');
-    const items = await res.json();
+    const items = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(parseApiError(items, 'Failed to fetch prompts'));
+    }
     promptList.innerHTML = '';
     if (items.length === 0) {
       promptList.innerHTML = '<li class="empty-state">No prompts saved yet</li>';
@@ -452,14 +429,15 @@ async function fetchPrompts() {
           if (res.ok) {
             fetchPrompts();
           } else {
-            alert('Delete failed');
+            const data = await res.json().catch(() => ({}));
+            alert('Delete failed: ' + parseApiError(data, 'Delete failed'));
           }
         });
         promptList.appendChild(li);
       });
     }
   } catch (err) {
-    promptList.innerHTML = `<li class="empty-state">Error: ${err.message}</li>`;
+    promptList.innerHTML = `<li class="empty-state">Error: ${normalizeError(err, 'Failed to fetch prompts')}</li>`;
   }
 }
 
@@ -479,28 +457,16 @@ promptForm.addEventListener('submit', async (ev) => {
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify(body)
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      let errorMsg = 'Failed to save prompt';
-      if (data.detail) {
-        if (typeof data.detail === 'string') {
-          errorMsg = data.detail;
-        } else if (Array.isArray(data.detail)) {
-          errorMsg = data.detail.map(err => 
-            `${err.loc?.[0] || 'field'}: ${err.msg}`
-          ).join('; ');
-        } else if (typeof data.detail === 'object') {
-          errorMsg = JSON.stringify(data.detail);
-        }
-      }
-      throw new Error(errorMsg);
+      throw new Error(parseApiError(data, 'Failed to save prompt'));
     }
     promptResult.textContent = `✓ Prompt saved: ${data.id}`;
     promptResult.className = 'form-result success';
     promptForm.reset();
     fetchPrompts();
   } catch (err) {
-    promptResult.textContent = `✗ Error: ${err.message}`;
+    promptResult.textContent = `✗ Error: ${normalizeError(err, 'Failed to save prompt')}`;
     promptResult.className = 'form-result error';
   }
 });

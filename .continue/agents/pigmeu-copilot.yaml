@@ -1,31 +1,40 @@
-# This is an example configuration file
-# To learn more, see the full config.yaml reference: https://docs.continue.dev/reference
-
 name: PIGMEU
 version: 1.0.0
 schema: v1
-
-# Define which models can be used
-# https://docs.continue.dev/customization/models
 models:
-  - name: mistral
-    provider: nistral
-    model: gpt-5
+  - name: Codestral
+    provider: mistral
+    model: codestral-latest
     apiKey: XgSO4MV9BWpVzvnW4sspLMAjyJS97Qy
-  - uses: mistral-large-latest
-  - uses: devstral-latest
-    with:
-      MISTRAL_KEY: ${{ apiKey }} #${{ secrets.ANTHROPIC_API_KEY }}
+    roles:
+      - autocomplete
+    autocompleteOptions:
+      debounceDelay: 250
+      maxPromptTokens: 1024
+      onlyMyCode: true
 
-rules:
-  - uses: rules/task-segmentation.md
-
-# models:
-#   - name: Mistral
+#   - name: mistral
 #     provider: nistral
-#     model: mistral-large-latest
+#     model: gpt-5
 #     apiKey: XgSO4MV9BWpVzvnW4sspLMAjyJS97Qy
-# MCP Servers that Continue can access
-# https://docs.continue.dev/customization/mcp-tools
-#mcpServers:
-#  - uses: anthropic/memory-mcp
+#   - uses: mistral-large-latest
+#   - uses: devstral-latest
+#     roles:
+#       - chat
+#       - edit
+# #    with:
+# #      MISTRAL_KEY: ${{ apiKey }} #${{ secrets.ANTHROPIC_API_KEY }}
+# 
+# rules:
+#   - uses: rules/task-segmentation.md
+# 
+# # models:
+# #   - name: Mistral
+# #     provider: nistral
+# #     model: mistral-large-latest
+# #     apiKey: XgSO4MV9BWpVzvnW4sspLMAjyJS97Qy
+# # MCP Servers that Continue can access
+# # https://docs.continue.dev/customization/mcp-tools
+# #mcpServers:
+# #  - uses: anthropic/memory-mcp
+# 

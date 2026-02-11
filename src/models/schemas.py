@@ -1,4 +1,4 @@
-from pydantic import BaseModel, HttpUrl, Field
+from pydantic import BaseModel, HttpUrl, Field, field_validator
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from src.models.enums import SubmissionStatus, ArticleStatus, ServiceType
@@ -12,6 +12,13 @@ class SubmissionCreate(BaseModel):
     goodreads_url: Optional[HttpUrl] = None
     author_site: Optional[HttpUrl] = None
     other_links: Optional[List[HttpUrl]] = []
+
+    @field_validator("goodreads_url", "author_site", mode="before")
+    @classmethod
+    def empty_optional_urls_to_none(cls, value):
+        if isinstance(value, str) and value.strip() == "":
+            return None
+        return value
 
 
 class SubmissionResponse(BaseModel):

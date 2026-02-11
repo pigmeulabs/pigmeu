@@ -85,6 +85,23 @@ class TestSubmitEndpoint:
         response = client.post("/submit", json=payload)
         
         assert response.status_code == 422
+
+    def test_submit_book_empty_optional_urls(self, client):
+        """Test submission with empty optional URL fields from form inputs."""
+        payload = {
+            "title": "The Pragmatic Programmer",
+            "author_name": "Andrew Hunt",
+            "amazon_url": "https://www.amazon.com/pragmatic-programmer/",
+            "goodreads_url": "",
+            "author_site": "",
+        }
+
+        response = client.post("/submit", json=payload)
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["goodreads_url"] is None
+        assert data["author_site"] is None
     
     def test_submit_health(self, client):
         """Test submit endpoint health check."""
