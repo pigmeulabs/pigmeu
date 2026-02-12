@@ -1,4 +1,5 @@
 from celery import Celery
+
 from src.config import settings
 
 # Initialize Celery app
@@ -15,7 +16,8 @@ app.conf.update(
     timezone="UTC",
     enable_utc=True,
     task_track_started=True,
-    task_time_limit=30 * 60,  # 30 minutes hard limit
+    task_time_limit=30 * 60,
+    task_ignore_result=True,
 )
 
 
@@ -27,13 +29,8 @@ def ping():
 
 @app.task(name="start_pipeline")
 def start_pipeline(submission_id: str, amazon_url: str):
-    """Entry task to start the scraping pipeline from web requests.
-
-    This task is lightweight and only enqueues the first scraper task,
-    delegating orchestration to the existing scraper task chain.
-    """
+    """Entry task to start scraping pipeline from web requests."""
     try:
-        # Import here to avoid circular imports at module import time
         from src.workers.scraper_tasks import start_scraping_pipeline
 
         start_scraping_pipeline(submission_id=submission_id, amazon_url=amazon_url)

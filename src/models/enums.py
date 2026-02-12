@@ -3,6 +3,7 @@ from enum import Enum
 
 class SubmissionStatus(str, Enum):
     """Status of a submission processing."""
+
     PENDING_SCRAPE = "pending_scrape"
     SCRAPING_AMAZON = "scraping_amazon"
     SCRAPING_GOODREADS = "scraping_goodreads"
@@ -21,6 +22,7 @@ class SubmissionStatus(str, Enum):
 
 class StepStatus(str, Enum):
     """Pipeline step status (for task progress)."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -29,6 +31,7 @@ class StepStatus(str, Enum):
 
 class ArticleStatus(str, Enum):
     """Status of an article."""
+
     DRAFT = "draft"
     IN_REVIEW = "in_review"
     APPROVED = "approved"
@@ -38,7 +41,10 @@ class ArticleStatus(str, Enum):
 
 class ServiceType(str, Enum):
     """Type of service credential."""
+
     OPENAI = "openai"
+    GROQ = "groq"
+    MISTRAL = "mistral"
     CLAUDE = "claude"
     WORDPRESS = "wordpress"
     AMAZON_PA_API = "amazon_pa_api"

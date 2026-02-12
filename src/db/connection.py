@@ -23,6 +23,11 @@ async def get_database() -> AsyncIOMotorDatabase:
     return _database
 
 
+async def get_db() -> AsyncIOMotorDatabase:
+    """Backward-compatible alias used by worker modules."""
+    return await get_database()
+
+
 async def close_mongo_client() -> None:
     """Close MongoDB client connection."""
     global _client, _database

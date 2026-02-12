@@ -1,13 +1,15 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 import logging
+
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+from src.api import ingest, tasks, settings as settings_router, articles, operations
 from src.config import settings
 from src.db.connection import close_mongo_client
 from src.db.migrations import run_migrations
 from src.logger import setup_logger
-from src.api import ingest, tasks
 
 # Setup logging
 setup_logger()
@@ -17,24 +19,22 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage app startup and shutdown."""
-    # Startup
     try:
-        logger.info("🚀 Starting Pigmeu Copilot API")
+        logger.info("Starting Pigmeu Copilot API")
         await run_migrations()
-        logger.info("✓ Database migrations completed")
+        logger.info("Database migrations completed")
     except Exception as e:
-        logger.error(f"❌ Startup failed: {e}")
+        logger.error("Startup failed: %s", e)
         raise
 
     yield
 
-    # Shutdown
     try:
-        logger.info("🛑 Shutting down Pigmeu Copilot API")
+        logger.info("Shutting down Pigmeu Copilot API")
         await close_mongo_client()
-        logger.info("✓ Database connection closed")
+        logger.info("Database connection closed")
     except Exception as e:
-        logger.error(f"❌ Shutdown error: {e}")
+        logger.error("Shutdown error: %s", e)
 
 
 app = FastAPI(
@@ -47,9 +47,9 @@ app = FastAPI(
 # Include routers
 app.include_router(ingest.router)
 app.include_router(tasks.router)
-from src.api import settings as settings_router
 app.include_router(settings_router.router)
-
+app.include_router(articles.router)
+app.include_router(operations.router)
 
 # Serve a minimal web UI under /ui
 app.mount("/ui/static", StaticFiles(directory="src/static"), name="static")

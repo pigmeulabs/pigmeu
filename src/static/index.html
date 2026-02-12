@@ -8,23 +8,16 @@
 </head>
 <body>
     <div class="layout">
-        <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="logo">📚 Pigmeu</div>
                 <div class="app-title">Copilot</div>
             </div>
-            
+
             <nav class="nav-menu">
-                <a href="#tasks" class="nav-link active" data-section="tasks-section">
-                    <span class="icon">📋</span> Tarefas
-                </a>
-                <a href="#submit" class="nav-link" data-section="submit-section">
-                    <span class="icon">➕</span> Nova Tarefa
-                </a>
-                <a href="#settings" class="nav-link" data-section="settings-section">
-                    <span class="icon">⚙️</span> Configurações
-                </a>
+                <a href="#tasks" class="nav-link active" data-section="tasks-section"><span class="icon">📋</span> Tarefas</a>
+                <a href="#submit" class="nav-link" data-section="submit-section"><span class="icon">➕</span> Nova Tarefa</a>
+                <a href="#settings" class="nav-link" data-section="settings-section"><span class="icon">⚙️</span> Configurações</a>
             </nav>
 
             <div class="sidebar-footer">
@@ -35,9 +28,7 @@
             </div>
         </aside>
 
-        <!-- Main Content -->
         <main class="main">
-            <!-- Header -->
             <header class="header">
                 <div class="header-left">
                     <h1 id="page-title">Tarefas</h1>
@@ -45,14 +36,12 @@
                 <div class="header-right">
                     <div class="health-badge">
                         <span class="dot"></span>
-                        <span id="health-status">Verificando...</span>
+                        <span id="health-status">Pronto</span>
                     </div>
                 </div>
             </header>
 
-            <!-- Content Area -->
             <div class="content">
-                <!-- Tasks Section -->
                 <section id="tasks-section" class="section active">
                     <div class="section-header">
                         <h2>Minhas Tarefas</h2>
@@ -62,13 +51,22 @@
                     </div>
 
                     <div class="filters">
-                        <input type="text" id="search-tasks" placeholder="Buscar tarefas..." class="search-input">
+                        <input type="text" id="search-tasks" placeholder="Buscar por título/autor..." class="search-input">
                         <select id="filter-status" class="filter-select">
                             <option value="">Todos os status</option>
                             <option value="pending_scrape">Pendente de scrape</option>
+                            <option value="context_generation">Gerando contexto</option>
                             <option value="context_generated">Contexto gerado</option>
+                            <option value="pending_article">Pendente de artigo</option>
                             <option value="article_generated">Artigo gerado</option>
+                            <option value="ready_for_review">Pronto para revisão</option>
+                            <option value="published">Publicado</option>
+                            <option value="scraping_failed">Falha</option>
                         </select>
+                    </div>
+
+                    <div id="stats-strip" class="stats-strip">
+                        <div class="loading">Carregando métricas...</div>
                     </div>
 
                     <div id="tasks-grid" class="tasks-grid">
@@ -81,7 +79,6 @@
                         <button id="next-page" class="btn btn-secondary">Próxima →</button>
                     </div>
 
-                    <!-- Task Details Modal -->
                     <div id="task-modal" class="modal">
                         <div class="modal-content">
                             <button class="modal-close">&times;</button>
@@ -89,78 +86,136 @@
                     </div>
                 </section>
 
-                <!-- Submit Section -->
                 <section id="submit-section" class="section">
                     <div class="section-header">
-                        <h2>Submeter Novo Livro</h2>
+                        <h2>Nova Task: Book Review Article</h2>
                     </div>
 
                     <div class="form-container">
                         <form id="submit-form" class="form">
                             <div class="form-group">
-                                <label for="title" class="form-label">Título do Livro *</label>
-                                <input type="text" id="title" name="title" class="form-input" required placeholder="Ex: Designing Data-Intensive Applications">
+                                <label for="title" class="form-label">Book Title *</label>
+                                <input type="text" id="title" name="title" class="form-input" required>
                             </div>
 
                             <div class="form-group">
-                                <label for="author_name" class="form-label">Nome do Autor *</label>
-                                <input type="text" id="author_name" name="author_name" class="form-input" required placeholder="Ex: Martin Kleppmann">
+                                <label for="author_name" class="form-label">Author name *</label>
+                                <input type="text" id="author_name" name="author_name" class="form-input" required>
                             </div>
 
                             <div class="form-group">
-                                <label for="amazon_url" class="form-label">URL Amazon *</label>
-                                <input type="url" id="amazon_url" name="amazon_url" class="form-input" required placeholder="https://amazon.com/...">
+                                <label for="amazon_url" class="form-label">Amazon Link *</label>
+                                <input type="url" id="amazon_url" name="amazon_url" class="form-input" required>
                             </div>
 
                             <div class="form-group">
-                                <label for="goodreads_url" class="form-label">URL Goodreads (opcional)</label>
-                                <input type="url" id="goodreads_url" name="goodreads_url" class="form-input" placeholder="https://goodreads.com/...">
+                                <label for="goodreads_url" class="form-label">Goodreads Link (opcional)</label>
+                                <input type="url" id="goodreads_url" name="goodreads_url" class="form-input">
                             </div>
 
                             <div class="form-group">
-                                <label for="author_site" class="form-label">Site do Autor (opcional)</label>
-                                <input type="url" id="author_site" name="author_site" class="form-input" placeholder="https://author.com">
+                                <label for="author_site" class="form-label">Author site (opcional)</label>
+                                <input type="url" id="author_site" name="author_site" class="form-input">
                             </div>
 
-                            <button type="submit" class="btn btn-primary btn-large">Submeter Livro</button>
+                            <div class="form-group">
+                                <label class="form-label">Additional Content Links (opcional)</label>
+                                <div id="other-links-container">
+                                    <input type="url" class="form-input other-link" placeholder="https://...">
+                                </div>
+                                <button id="add-other-link" type="button" class="btn btn-secondary" style="margin-top:8px;">+ Adicionar link</button>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="textual_information" class="form-label">Textual information (opcional)</label>
+                                <textarea id="textual_information" name="textual_information" class="form-textarea" rows="4"></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="run_immediately" name="run_immediately" checked>
+                                    Run immediately
+                                </label>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="schedule_execution" class="form-label">Schedule execution</label>
+                                <input type="datetime-local" id="schedule_execution" name="schedule_execution" class="form-input" disabled>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="main_category" class="form-label">Main Category</label>
+                                    <input type="text" id="main_category" name="main_category" class="form-input" placeholder="Ex: Technology">
+                                </div>
+                                <div class="form-group">
+                                    <label for="article_status" class="form-label">Article Status</label>
+                                    <select id="article_status" name="article_status" class="form-input">
+                                        <option value="">Selecione</option>
+                                        <option value="draft">Draft</option>
+                                        <option value="in_review">In review</option>
+                                        <option value="approved">Approved</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="user_approval_required" name="user_approval_required">
+                                    User approval required
+                                </label>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-large">Create Task</button>
                             <div id="submit-result" class="form-result"></div>
                         </form>
                     </div>
                 </section>
 
-                <!-- Settings Section -->
                 <section id="settings-section" class="section">
                     <div class="section-header">
                         <h2>Configurações</h2>
                     </div>
 
                     <div class="settings-grid">
-                        <!-- Credentials -->
                         <div class="settings-card">
-                            <h3>Credenciais de API</h3>
-                            <p class="text-muted">Configure suas credenciais para OpenAI, WordPress e outros serviços.</p>
+                            <h3>Credenciais</h3>
+                            <p class="text-muted">Gerencie credenciais para LLM e WordPress.</p>
 
                             <form id="cred-form" class="form">
                                 <div class="form-group">
-                                    <label for="cred-service" class="form-label">Serviço</label>
+                                    <label for="cred-service" class="form-label">Service</label>
                                     <select id="cred-service" name="service" class="form-input">
                                         <option value="openai">OpenAI</option>
-                                        <option value="claude">Claude (Anthropic)</option>
+                                        <option value="groq">Groq</option>
+                                        <option value="mistral">Mistral</option>
                                         <option value="wordpress">WordPress</option>
                                     </select>
                                 </div>
 
                                 <div class="form-group">
-                                    <label for="cred-key" class="form-label">Chave de API</label>
-                                    <input type="password" id="cred-key" name="key" class="form-input" required placeholder="sk-...">
+                                    <label for="cred-name" class="form-label">Credential Name</label>
+                                    <input type="text" id="cred-name" name="name" class="form-input" placeholder="Ex: Mistral Cloud #1">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="cred-key" class="form-label">API Key *</label>
+                                    <input type="password" id="cred-key" name="key" class="form-input" required>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="cred-username" class="form-label">Username/email</label>
+                                    <input type="text" id="cred-username" name="username_email" class="form-input">
                                 </div>
 
                                 <label class="checkbox-label">
-                                    <input type="checkbox" name="encrypted" checked>
-                                    Criptografar
+                                    <input type="checkbox" name="encrypted" checked> Criptografar
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="active" checked> Ativa
                                 </label>
 
-                                <button type="submit" class="btn btn-primary">Adicionar Credencial</button>
+                                <button type="submit" class="btn btn-primary">Salvar credencial</button>
                             </form>
 
                             <div id="cred-result" class="form-result"></div>
@@ -173,39 +228,43 @@
                             </div>
                         </div>
 
-                        <!-- Prompts -->
                         <div class="settings-card">
-                            <h3>Modelos de Prompt</h3>
-                            <p class="text-muted">Crie e gerencie prompts para extração e geração de conteúdo.</p>
+                            <h3>Prompts</h3>
+                            <p class="text-muted">Crie, edite e ative/desative prompts do pipeline.</p>
 
                             <form id="prompt-form" class="form">
                                 <div class="form-group">
-                                    <label for="prompt-name" class="form-label">Nome do Prompt</label>
-                                    <input type="text" id="prompt-name" name="name" class="form-input" required placeholder="Ex: Context Generator">
+                                    <label for="prompt-name" class="form-label">Prompt name *</label>
+                                    <input type="text" id="prompt-name" name="name" class="form-input" required>
                                 </div>
 
                                 <div class="form-group">
-                                    <label for="prompt-purpose" class="form-label">Propósito</label>
-                                    <input type="text" id="prompt-purpose" name="purpose" class="form-input" placeholder="Ex: Gerar contexto do livro">
+                                    <label for="prompt-purpose" class="form-label">Purpose</label>
+                                    <input type="text" id="prompt-purpose" name="purpose" class="form-input" placeholder="context / article / summarization">
                                 </div>
 
                                 <div class="form-group">
-                                    <label for="prompt-system" class="form-label">System Prompt</label>
-                                    <textarea id="prompt-system" name="system_prompt" class="form-textarea" rows="3" placeholder="Instruções de sistema para o modelo..."></textarea>
+                                    <label for="prompt-short" class="form-label">Short description</label>
+                                    <input type="text" id="prompt-short" name="short_description" class="form-input">
                                 </div>
 
                                 <div class="form-group">
-                                    <label for="prompt-user" class="form-label">User Prompt</label>
-                                    <textarea id="prompt-user" name="user_prompt" class="form-textarea" rows="3" placeholder="Template de prompt do usuário..."></textarea>
+                                    <label for="prompt-system" class="form-label">System Prompt *</label>
+                                    <textarea id="prompt-system" name="system_prompt" class="form-textarea" rows="3" required></textarea>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="prompt-user" class="form-label">User Prompt *</label>
+                                    <textarea id="prompt-user" name="user_prompt" class="form-textarea" rows="3" required></textarea>
                                 </div>
 
                                 <div class="form-row">
                                     <div class="form-group">
-                                        <label for="prompt-model" class="form-label">Modelo</label>
-                                        <input type="text" id="prompt-model" name="model_id" class="form-input" value="gpt-3.5-turbo" placeholder="gpt-3.5-turbo">
+                                        <label for="prompt-model" class="form-label">Model</label>
+                                        <input type="text" id="prompt-model" name="model_id" class="form-input" value="gpt-4o-mini">
                                     </div>
                                     <div class="form-group">
-                                        <label for="prompt-temp" class="form-label">Temperatura</label>
+                                        <label for="prompt-temp" class="form-label">Temperature</label>
                                         <input type="number" id="prompt-temp" name="temperature" class="form-input" step="0.1" min="0" max="2" value="0.7">
                                     </div>
                                     <div class="form-group">
@@ -214,7 +273,11 @@
                                     </div>
                                 </div>
 
-                                <button type="submit" class="btn btn-primary">Criar Prompt</button>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="active" checked> Ativo
+                                </label>
+
+                                <button type="submit" class="btn btn-primary">Salvar prompt</button>
                             </form>
 
                             <div id="prompt-result" class="form-result"></div>

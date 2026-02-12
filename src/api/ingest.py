@@ -7,8 +7,6 @@ that flows through the processing pipeline.
 """
 
 from fastapi import APIRouter, HTTPException, Depends, status
-from typing import Optional
-from datetime import datetime
 from src.models.schemas import SubmissionCreate, SubmissionResponse
 from src.models.enums import SubmissionStatus
 from src.db.repositories import SubmissionRepository
@@ -32,56 +30,20 @@ async def submit_book(
     submission: SubmissionCreate,
     repo: SubmissionRepository = Depends(get_submission_repo),
 ) -> SubmissionResponse:
-    """Submit a new book for review processing.
-    
-    This endpoint:
-    1. Validates book information (title, author, URLs)
-    2. Checks for duplicates (same Amazon URL)
-    3. Creates submission document in database
-    4. Returns submission with pending_scrape status
-    
-    The submission will be picked up by a worker for:
-    - Scraping Amazon metadata
-    - Extracting book information
-    - Generating context from multiple sources
-    - Creating article
-    
-    Args:
-        submission: Submission data (title, author, links)
-        repo: SubmissionRepository (injected)
-    
-    Returns:
-        SubmissionResponse with submission_id and status
-    
-    Raises:
-        HTTPException 400: If duplicate book found
-        HTTPException 500: If database error occurs
-    
-    Example:
-        POST /submit
-        {
-            "title": "Designing Data-Intensive Applications",
-            "author_name": "Martin Kleppmann",
-            "amazon_url": "https://amazon.com/...",
-            "goodreads_url": "https://goodreads.com/...",
-            "author_site": "https://martin.kleppmann.com"
-        }
-    """
-    
+    """Submit a new book for review processing."""
+
     try:
-        # Check for duplicate submissions (same Amazon URL)
-        logger.info(f"Checking for duplicate submission: {submission.amazon_url}")
+        logger.info("Checking for duplicate submission: %s", submission.amazon_url)
         duplicate_id = await repo.check_duplicate(str(submission.amazon_url))
-        
+
         if duplicate_id:
-            logger.warning(f"Duplicate submission found: {duplicate_id}")
+            logger.warning("Duplicate submission found: %s", duplicate_id)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Book already submitted: {duplicate_id}. Check status or contact support.",
             )
-        
-        # Create submission
-        logger.info(f"Creating submission: {submission.title} by {submission.author_name}")
+
+        logger.info("Creating submission: %s by %s", submission.title, submission.author_name)
         submission_id = await repo.create(
             title=submission.title,
             author_name=submission.author_name,
@@ -89,22 +51,23 @@ async def submit_book(
             goodreads_url=submission.goodreads_url,
             author_site=submission.author_site,
             other_links=submission.other_links,
+            textual_information=submission.textual_information,
+            run_immediately=submission.run_immediately,
+            schedule_execution=submission.schedule_execution,
+            main_category=submission.main_category,
+            article_status=submission.article_status,
+            user_approval_required=submission.user_approval_required,
         )
-        
-        logger.info(f"✓ Submission created: {submission_id}")
-        
-        # Fetch created document
-        doc = await repo.get_by_id(submission_id)
-        
-        # Trigger background processing pipeline (Celery)
-        try:
-            logger.info(f"Enqueueing scraping pipeline for: {submission_id}")
-            # Use Celery task to start the pipeline so the request returns quickly
-            start_pipeline.delay(submission_id=submission_id, amazon_url=str(submission.amazon_url))
-        except Exception:
-            logger.exception("Failed to enqueue scraping pipeline")
 
-        # Convert to response model
+        doc = await repo.get_by_id(submission_id)
+
+        if submission.run_immediately:
+            try:
+                logger.info("Enqueueing scraping pipeline for: %s", submission_id)
+                start_pipeline.delay(submission_id=submission_id, amazon_url=str(submission.amazon_url))
+            except Exception:
+                logger.exception("Failed to enqueue scraping pipeline")
+
         return SubmissionResponse(
             id=str(doc["_id"]),
             title=doc["title"],
@@ -113,16 +76,21 @@ async def submit_book(
             goodreads_url=doc.get("goodreads_url"),
             author_site=doc.get("author_site"),
             other_links=doc.get("other_links", []),
+            textual_information=doc.get("textual_information"),
+            run_immediately=doc.get("run_immediately", True),
+            schedule_execution=doc.get("schedule_execution"),
+            main_category=doc.get("main_category"),
+            article_status=doc.get("article_status"),
+            user_approval_required=doc.get("user_approval_required", False),
             status=SubmissionStatus(doc["status"]),
             created_at=doc["created_at"],
             updated_at=doc["updated_at"],
         )
-        
+
     except HTTPException:
-        # Re-raise HTTP exceptions
         raise
     except Exception as e:
-        logger.error(f"❌ Error creating submission: {str(e)}", exc_info=True)
+        logger.error("Error creating submission: %s", str(e), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create submission. Please try again.",
@@ -135,9 +103,4 @@ async def submit_book(
     summary="Check submission endpoint health",
 )
 async def submit_health():
-    """Health check for submit endpoint.
-    
-    Returns:
-        Status message
-    """
     return {"status": "ok", "endpoint": "submit"}
