@@ -14,6 +14,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
+# edite o .env e preencha principalmente MONGODB_URI com uma URI valida
 python scripts/migrate.py
 docker compose -f infra/docker-compose.yml up --build
 ```
