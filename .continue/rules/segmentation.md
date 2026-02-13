@@ -1,5 +1,5 @@
 ---
-name: Segmentation
+name: segmentation
 description: Comportamento de segmentação de tarefas do Agente
 ---
 

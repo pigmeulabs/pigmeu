@@ -78,7 +78,10 @@ async def _delete_articles_and_drafts(
     await article_repo.collection.delete_many(query)
 
 
-async def _clear_book_extracted_keys(book_repo: BookRepository, book_doc: Dict[str, Any], keys: list[str]) -> None:
+async def _clear_book_extracted_keys(book_repo: BookRepository, book_doc: Optional[Dict[str, Any]], keys: list[str]) -> None:
+    if not book_doc:
+        return
+        
     extracted = dict(book_doc.get("extracted") or {})
     changed = False
     for key in keys:
@@ -269,7 +272,10 @@ async def _enqueue_stage_retry(submission_id: str, stage: str, amazon_url: str) 
     raise ValueError(f"Unsupported stage for retry: {stage}")
 
 
-def _build_progress(current_status: str) -> Dict[str, Any]:
+def _build_progress(current_status: Optional[str]) -> Dict[str, Any]:
+    if not current_status:
+        current_status = SubmissionStatus.PENDING_SCRAPE.value
+        
     steps_def = [
         (SubmissionStatus.PENDING_SCRAPE.value, "Scraping metadata..."),
         (SubmissionStatus.PENDING_CONTEXT.value, "Generating context..."),
@@ -457,13 +463,13 @@ async def get_task(
         }
 
     response = {
-        "submission": _serialize_submission(submission),
+        "submission": _serialize_submission(submission) if submission else None,
         "book": book_data,
         "summaries": summaries_data,
         "knowledge_base": kb if kb else None,
         "article": article_data,
         "draft": draft,
-        "progress": _build_progress(submission.get("status")),
+        "progress": _build_progress(submission.get("status") if submission else None),
         "pipeline": pipeline_data,
     }
     return _sanitize_for_response(response)
@@ -774,7 +780,7 @@ async def update_task(
     book = await book_repo.get_by_submission(submission_id)
 
     return {
-        "submission": _serialize_submission(updated),
+        "submission": _serialize_submission(updated) if updated else None,
         "book": {
             "id": str(book.get("_id")),
             "submission_id": str(book.get("submission_id")),
@@ -783,5 +789,5 @@ async def update_task(
         }
         if book
         else None,
-        "progress": _build_progress(updated.get("status")),
+        "progress": _build_progress(updated.get("status") if updated else None),
     }

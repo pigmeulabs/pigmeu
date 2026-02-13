@@ -345,6 +345,15 @@ navLinks.forEach((link) => {
   });
 });
 
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+  fetchTasks();
+  fetchStats();
+  applyStaticActionIcons();
+  const collapsed = readSidebarCollapsedState();
+  applySidebarCollapsedState(collapsed);
+});
+
 function setTaskDetailsContent(innerHtml) {
   if (!taskDetailsContent) return;
   taskDetailsContent.innerHTML = innerHtml;

@@ -766,3 +766,4 @@ class PipelineConfigRepository:
         doc["created_at"] = now
         result = await self.collection.insert_one(doc)
         return str(result.inserted_id)
+
