@@ -126,15 +126,27 @@ Campos aceitos:
 ### `GET /settings/credentials`
 Lista credenciais com máscara de chave.
 
-Filtros:
-- `service`
-- `active`
+Query params:
+- `service` (string)
+- `active` (bool)
 
 ### `GET /settings/credentials/{cred_id}`
 Retorna detalhe mascarado.
 
 ### `POST /settings/credentials`
 Cria credencial.
+
+Request:
+```json
+{
+  "service": "openai",
+  "name": "OpenAI Primary",
+  "key": "sk-...",
+  "username_email": "optional",
+  "encrypted": true,
+  "active": true
+}
+```
 
 ### `PATCH /settings/credentials/{cred_id}`
 Atualiza `key`, `name`, `username_email`, `active`.
@@ -147,10 +159,11 @@ Exclui credencial.
 ### `GET /settings/prompts`
 Lista prompts.
 
-Filtros:
-- `active`
-- `purpose`
-- `search`
+Query params:
+- `active` (bool)
+- `purpose` (string)
+- `search` (string)
+- `provider` (string, opcional)
 
 ### `GET /settings/prompts/{prompt_id}`
 Detalhe de prompt.
@@ -158,8 +171,51 @@ Detalhe de prompt.
 ### `POST /settings/prompts`
 Cria prompt.
 
+Request:
+```json
+{
+  "name": "Book Review Generator",
+  "short_description": "Gera artigo de review",
+  "purpose": "article",
+  "provider": "openai",
+  "credential_id": "<credential_id>",
+  "model_id": "gpt-4o-mini",
+  "temperature": 0.7,
+  "max_tokens": 2000,
+  "system_prompt": "...",
+  "user_prompt": "...",
+  "active": true
+}
+```
+
 ### `PATCH /settings/prompts/{prompt_id}`
 Atualiza campos do prompt.
 
 ### `DELETE /settings/prompts/{prompt_id}`
 Exclui prompt.
+
+## Endpoints auxiliares para UI de Prompt
+
+### `GET /settings/providers`
+Lista provedores disponíveis para seleção em UI.
+
+Response exemplo:
+```json
+{
+  "providers": ["openai", "groq", "mistral", "claude"]
+}
+```
+
+### `GET /settings/providers/{provider}/models`
+Lista modelos disponíveis para o `provider` selecionado.
+
+Response exemplo:
+```json
+{
+  "provider": "openai",
+  "models": ["gpt-4o", "gpt-4o-mini"]
+}
+```
+
+### `GET /settings/credentials?service={provider}&active=true`
+Lista credenciais ativas para preencher o seletor `Credential` no modal de prompt.

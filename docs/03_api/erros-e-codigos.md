@@ -8,6 +8,7 @@
 - `204 No Content`: exclusão sem payload de retorno.
 - `400 Bad Request`: regra de negócio violada.
 - `404 Not Found`: recurso inexistente.
+- `409 Conflict`: conflito de unicidade ou estado.
 - `422 Unprocessable Entity`: validação de payload.
 - `500 Internal Server Error`: falha inesperada.
 
@@ -16,6 +17,7 @@
 ### Submissions
 - `400`: duplicidade por `amazon_url`.
 - `422`: URL inválida ou campos obrigatórios ausentes.
+- `422`: `schedule_execution` ausente quando `run_immediately=false`.
 
 ### Tasks
 - `404`: submission/book/article não encontrados.
@@ -24,11 +26,14 @@
 
 ### Credentials
 - `404`: credencial não encontrada.
-- `422`: update sem campos válidos.
+- `422`: create/update sem campos obrigatórios.
+- `422`: combinação inválida de campos por tipo de serviço.
 
 ### Prompts
 - `404`: prompt não encontrado.
-- `422`: update sem campos válidos.
+- `409`: `name` duplicado.
+- `422`: create/update sem campos obrigatórios (`name`, `provider`, `credential_id`, `model_id`, `system_prompt`, `user_prompt`).
+- `422`: `temperature` ou `max_tokens` fora da faixa permitida.
 
 ### Articles
 - `404`: artigo não encontrado.

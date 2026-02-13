@@ -46,13 +46,17 @@ A API também executa migrações no startup (`lifespan`).
 ### `prompts`
 - `UNIQUE(name)`
 - `(purpose ASC, active ASC)`
-- `(model_id ASC)`
+- `(provider ASC, active ASC)`
+- `(credential_id ASC, active ASC)`
+- `(provider ASC, model_id ASC)`
 
 ## Observações operacionais
 
 - Índices únicos podem causar erro de gravação se já houver dados conflitantes.
 - A coleção `books` usa `submission_id` único; cada submission mantém um registro de metadados consolidado.
+- Para compatibilidade com a UI de prompts, `prompts` deve incluir `provider` e `credential_id`.
 - Alterações de schema devem ser acompanhadas de update em:
   - `src/models/schemas.py`
   - `src/db/repositories.py`
   - `src/db/migrations.py`
+  - `docs/03_api/contratos-api.md`

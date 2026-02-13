@@ -145,6 +145,13 @@ class SubmissionRepository:
         doc = await self.collection.find_one({"amazon_url": str(amazon_url)})
         return str(doc["_id"]) if doc else None
 
+    async def delete(self, submission_id: Union[str, ObjectId]) -> bool:
+        object_id = _to_object_id(submission_id)
+        if not object_id:
+            return False
+        result = await self.collection.delete_one({"_id": object_id})
+        return result.deleted_count > 0
+
     async def stats(self) -> Dict[str, Any]:
         total = await self.collection.count_documents({})
         by_status_pipeline = [
@@ -239,6 +246,7 @@ class SummaryRepository:
         key_points: Optional[List[str]] = None,
         credibility: Optional[str] = None,
         source_domain: Optional[str] = None,
+        extra_fields: Optional[Dict[str, Any]] = None,
     ) -> str:
         object_id = _to_object_id(book_id)
         if not object_id:
@@ -261,6 +269,8 @@ class SummaryRepository:
             "credibility": credibility,
             "created_at": utcnow(),
         }
+        if extra_fields:
+            document.update(extra_fields)
         result = await self.collection.insert_one(document)
         return str(result.inserted_id)
 
@@ -500,6 +510,12 @@ class CredentialRepository:
 
     async def get_active(self, service: str) -> Optional[Dict[str, Any]]:
         return await self.collection.find_one({"service": service, "active": True}, sort=[("created_at", DESCENDING)])
+
+    async def get_active_by_name(self, name: str, service: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        query: Dict[str, Any] = {"name": name, "active": True}
+        if service:
+            query["service"] = service
+        return await self.collection.find_one(query, sort=[("created_at", DESCENDING)])
 
     async def get_by_id(self, cred_id: Union[str, ObjectId]) -> Optional[Dict[str, Any]]:
         object_id = _to_object_id(cred_id)

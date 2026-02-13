@@ -10,18 +10,21 @@ These routes provide:
 
 import logging
 from typing import Optional, Dict, Any
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Body, status
 
 from src.api.dependencies import (
     get_submission_repo,
     get_book_repo,
+    get_summary_repo,
     get_knowledge_base_repo,
     get_article_repo,
 )
 from src.db.repositories import (
     SubmissionRepository,
     BookRepository,
+    SummaryRepository,
     KnowledgeBaseRepository,
     ArticleRepository,
 )
@@ -30,6 +33,236 @@ from src.workers.worker import start_pipeline
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 logger = logging.getLogger(__name__)
+
+
+def _normalize_retry_stage(stage: str) -> Optional[str]:
+    normalized = str(stage or "").strip().lower()
+    mapping = {
+        "amazon_scrape": "amazon_scrape",
+        "pending_scrape": "amazon_scrape",
+        "additional_links_scrape": "additional_links_scrape",
+        "summarize_additional_links": "summarize_additional_links",
+        "consolidate_book_data": "consolidate_book_data",
+        "internet_research": "internet_research",
+        "context_generation": "context_generation",
+        "pending_context": "context_generation",
+        "article_generation": "article_generation",
+        "pending_article": "article_generation",
+        "ready_for_review": "article_generation",
+    }
+    return mapping.get(normalized)
+
+
+async def _delete_articles_and_drafts(
+    article_repo: ArticleRepository,
+    submission_object_id=None,
+    book_object_id=None,
+) -> None:
+    filters = []
+    if submission_object_id is not None:
+        filters.append({"submission_id": submission_object_id})
+    if book_object_id is not None:
+        filters.append({"book_id": book_object_id})
+    if not filters:
+        return
+
+    query = {"$or": filters} if len(filters) > 1 else filters[0]
+    docs = await article_repo.collection.find(query, {"_id": 1}).to_list(length=None)
+    article_ids = [item.get("_id") for item in docs if item.get("_id") is not None]
+    if article_ids:
+        await article_repo.drafts_collection.delete_many({"article_id": {"$in": article_ids}})
+    await article_repo.collection.delete_many(query)
+
+
+async def _clear_book_extracted_keys(book_repo: BookRepository, book_doc: Dict[str, Any], keys: list[str]) -> None:
+    extracted = dict(book_doc.get("extracted") or {})
+    changed = False
+    for key in keys:
+        if key in extracted:
+            extracted.pop(key, None)
+            changed = True
+
+    if changed:
+        await book_repo.collection.update_one(
+            {"_id": book_doc.get("_id")},
+            {
+                "$set": {
+                    "extracted": extracted,
+                    "last_updated": datetime.utcnow(),
+                }
+            },
+        )
+
+
+async def _cleanup_from_stage(
+    stage: str,
+    submission_doc: Dict[str, Any],
+    book_doc: Optional[Dict[str, Any]],
+    repo: SubmissionRepository,
+    book_repo: BookRepository,
+    summary_repo: SummaryRepository,
+    kb_repo: KnowledgeBaseRepository,
+    article_repo: ArticleRepository,
+) -> None:
+    submission_object_id = submission_doc.get("_id")
+    book_object_id = book_doc.get("_id") if book_doc else None
+
+    if stage == "amazon_scrape":
+        if book_object_id is not None:
+            await summary_repo.collection.delete_many({"book_id": book_object_id})
+            await kb_repo.collection.delete_many(
+                {"$or": [{"book_id": book_object_id}, {"submission_id": submission_object_id}]}
+            )
+            await _delete_articles_and_drafts(
+                article_repo=article_repo,
+                submission_object_id=submission_object_id,
+                book_object_id=book_object_id,
+            )
+            await book_repo.collection.delete_one({"_id": book_object_id})
+        else:
+            await kb_repo.collection.delete_many({"submission_id": submission_object_id})
+            await _delete_articles_and_drafts(
+                article_repo=article_repo,
+                submission_object_id=submission_object_id,
+            )
+        return
+
+    if stage in {"additional_links_scrape", "summarize_additional_links"}:
+        if book_object_id is not None:
+            await summary_repo.collection.delete_many({"book_id": book_object_id})
+            await kb_repo.collection.delete_many(
+                {"$or": [{"book_id": book_object_id}, {"submission_id": submission_object_id}]}
+            )
+            await _delete_articles_and_drafts(
+                article_repo=article_repo,
+                submission_object_id=submission_object_id,
+                book_object_id=book_object_id,
+            )
+            await _clear_book_extracted_keys(
+                book_repo=book_repo,
+                book_doc=book_doc,
+                keys=[
+                    "link_bibliographic_candidates",
+                    "additional_links_total",
+                    "additional_links_processed",
+                    "additional_links_processed_at",
+                    "consolidated_bibliographic",
+                    "consolidated_sources_count",
+                    "consolidated_at",
+                    "web_research",
+                ],
+            )
+        return
+
+    if stage == "consolidate_book_data":
+        if book_object_id is not None:
+            await kb_repo.collection.delete_many(
+                {"$or": [{"book_id": book_object_id}, {"submission_id": submission_object_id}]}
+            )
+            await _delete_articles_and_drafts(
+                article_repo=article_repo,
+                submission_object_id=submission_object_id,
+                book_object_id=book_object_id,
+            )
+            await _clear_book_extracted_keys(
+                book_repo=book_repo,
+                book_doc=book_doc,
+                keys=[
+                    "consolidated_bibliographic",
+                    "consolidated_sources_count",
+                    "consolidated_at",
+                    "web_research",
+                ],
+            )
+        return
+
+    if stage == "internet_research":
+        if book_object_id is not None:
+            await kb_repo.collection.delete_many(
+                {"$or": [{"book_id": book_object_id}, {"submission_id": submission_object_id}]}
+            )
+            await _delete_articles_and_drafts(
+                article_repo=article_repo,
+                submission_object_id=submission_object_id,
+                book_object_id=book_object_id,
+            )
+            await _clear_book_extracted_keys(
+                book_repo=book_repo,
+                book_doc=book_doc,
+                keys=["web_research"],
+            )
+        return
+
+    if stage == "context_generation":
+        if book_object_id is not None:
+            await kb_repo.collection.delete_many(
+                {"$or": [{"book_id": book_object_id}, {"submission_id": submission_object_id}]}
+            )
+            await _delete_articles_and_drafts(
+                article_repo=article_repo,
+                submission_object_id=submission_object_id,
+                book_object_id=book_object_id,
+            )
+        else:
+            await kb_repo.collection.delete_many({"submission_id": submission_object_id})
+            await _delete_articles_and_drafts(
+                article_repo=article_repo,
+                submission_object_id=submission_object_id,
+            )
+        return
+
+    if stage == "article_generation":
+        await _delete_articles_and_drafts(
+            article_repo=article_repo,
+            submission_object_id=submission_object_id,
+            book_object_id=book_object_id,
+        )
+        return
+
+    await repo.update_fields(
+        str(submission_object_id),
+        {"errors": []},
+    )
+
+
+async def _enqueue_stage_retry(submission_id: str, stage: str, amazon_url: str) -> None:
+    if stage == "amazon_scrape":
+        from src.workers.scraper_tasks import scrape_amazon_task
+
+        scrape_amazon_task.delay(submission_id=submission_id, amazon_url=amazon_url)
+        return
+
+    if stage in {"additional_links_scrape", "summarize_additional_links"}:
+        from src.workers.scraper_tasks import process_additional_links_task
+
+        process_additional_links_task.delay(submission_id=submission_id)
+        return
+
+    if stage == "consolidate_book_data":
+        from src.workers.scraper_tasks import consolidate_bibliographic_task
+
+        consolidate_bibliographic_task.delay(submission_id=submission_id)
+        return
+
+    if stage == "internet_research":
+        from src.workers.scraper_tasks import internet_research_task
+
+        internet_research_task.delay(submission_id=submission_id)
+        return
+
+    if stage == "context_generation":
+        from src.workers.scraper_tasks import generate_context_task
+
+        generate_context_task.delay(submission_id=submission_id)
+        return
+
+    if stage == "article_generation":
+        from src.workers.article_tasks import generate_article_task
+
+        generate_article_task.delay(submission_id=submission_id)
+        return
+
+    raise ValueError(f"Unsupported stage for retry: {stage}")
 
 
 def _build_progress(current_status: str) -> Dict[str, Any]:
@@ -124,6 +357,7 @@ async def get_task(
     submission_id: str,
     repo: SubmissionRepository = Depends(get_submission_repo),
     book_repo: BookRepository = Depends(get_book_repo),
+    summary_repo: SummaryRepository = Depends(get_summary_repo),
     kb_repo: KnowledgeBaseRepository = Depends(get_knowledge_base_repo),
     article_repo: ArticleRepository = Depends(get_article_repo),
 ):
@@ -132,6 +366,7 @@ async def get_task(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Submission not found: {submission_id}")
 
     book = await book_repo.get_by_submission(submission_id)
+    summaries = await summary_repo.get_by_book(str(book["_id"])) if book else []
     kb = await kb_repo.get_by_book(str(book["_id"])) if book else None
     article = await article_repo.get_by_book(str(book["_id"])) if book else None
     draft = await article_repo.get_draft(str(article["_id"])) if article else None
@@ -161,9 +396,25 @@ async def get_task(
             "updated_at": article.get("updated_at"),
         }
 
+    summaries_data = [
+        {
+            "id": str(item.get("_id")),
+            "source_url": item.get("source_url"),
+            "source_domain": item.get("source_domain"),
+            "summary_text": item.get("summary_text"),
+            "topics": item.get("topics", []),
+            "key_points": item.get("key_points", []),
+            "credibility": item.get("credibility"),
+            "bibliographic_data": item.get("bibliographic_data"),
+            "created_at": item.get("created_at"),
+        }
+        for item in summaries
+    ]
+
     return {
         "submission": _serialize_submission(submission),
         "book": book_data,
+        "summaries": summaries_data,
         "knowledge_base": kb if kb else None,
         "article": article_data,
         "draft": draft,
@@ -235,6 +486,142 @@ async def retry_task(submission_id: str, repo: SubmissionRepository = Depends(ge
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to queue retry")
 
     return {"status": "queued", "task": "retry", "submission_id": submission_id}
+
+
+@router.post("/{submission_id}/retry_step", status_code=status.HTTP_202_ACCEPTED, summary="Retry from specific step")
+async def retry_task_from_step(
+    submission_id: str,
+    payload: Dict[str, Any] = Body(...),
+    repo: SubmissionRepository = Depends(get_submission_repo),
+    book_repo: BookRepository = Depends(get_book_repo),
+    summary_repo: SummaryRepository = Depends(get_summary_repo),
+    kb_repo: KnowledgeBaseRepository = Depends(get_knowledge_base_repo),
+    article_repo: ArticleRepository = Depends(get_article_repo),
+):
+    submission = await repo.get_by_id(submission_id)
+    if not submission:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+
+    stage_raw = payload.get("stage")
+    normalized_stage = _normalize_retry_stage(str(stage_raw or ""))
+    if not normalized_stage:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid retry stage")
+
+    book = await book_repo.get_by_submission(submission_id)
+    if normalized_stage != "amazon_scrape" and not book:
+        normalized_stage = "amazon_scrape"
+
+    await _cleanup_from_stage(
+        stage=normalized_stage,
+        submission_doc=submission,
+        book_doc=book,
+        repo=repo,
+        book_repo=book_repo,
+        summary_repo=summary_repo,
+        kb_repo=kb_repo,
+        article_repo=article_repo,
+    )
+
+    status_map = {
+        "amazon_scrape": SubmissionStatus.PENDING_SCRAPE,
+        "additional_links_scrape": SubmissionStatus.PENDING_CONTEXT,
+        "summarize_additional_links": SubmissionStatus.PENDING_CONTEXT,
+        "consolidate_book_data": SubmissionStatus.PENDING_CONTEXT,
+        "internet_research": SubmissionStatus.PENDING_CONTEXT,
+        "context_generation": SubmissionStatus.CONTEXT_GENERATION,
+        "article_generation": SubmissionStatus.PENDING_ARTICLE,
+    }
+    await repo.update_status(
+        submission_id,
+        status_map[normalized_stage],
+        {
+            "current_step": normalized_stage,
+            "errors": [],
+        },
+    )
+
+    amazon_url = str(submission.get("amazon_url") or "")
+    if not amazon_url:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Submission amazon_url is required")
+
+    try:
+        await _enqueue_stage_retry(
+            submission_id=submission_id,
+            stage=normalized_stage,
+            amazon_url=amazon_url,
+        )
+    except Exception as e:
+        logger.error("Failed to enqueue retry from step '%s': %s", normalized_stage, e, exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to queue step retry")
+
+    return {
+        "status": "queued",
+        "task": "retry_step",
+        "submission_id": submission_id,
+        "stage": normalized_stage,
+    }
+
+
+@router.delete("/{submission_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete submission task")
+async def delete_task(
+    submission_id: str,
+    repo: SubmissionRepository = Depends(get_submission_repo),
+    book_repo: BookRepository = Depends(get_book_repo),
+    summary_repo: SummaryRepository = Depends(get_summary_repo),
+    kb_repo: KnowledgeBaseRepository = Depends(get_knowledge_base_repo),
+    article_repo: ArticleRepository = Depends(get_article_repo),
+):
+    submission = await repo.get_by_id(submission_id)
+    if not submission:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+
+    submission_object_id = submission.get("_id")
+    book = await book_repo.get_by_submission(submission_id)
+    book_object_id = book.get("_id") if book else None
+
+    article_ids = []
+    if book_object_id:
+        by_book = await article_repo.collection.find({"book_id": book_object_id}, {"_id": 1}).to_list(length=None)
+        article_ids.extend([item.get("_id") for item in by_book if item.get("_id")])
+
+    by_submission = await article_repo.collection.find(
+        {"submission_id": submission_object_id},
+        {"_id": 1},
+    ).to_list(length=None)
+    article_ids.extend([item.get("_id") for item in by_submission if item.get("_id")])
+
+    dedup_article_ids = list({item for item in article_ids if item is not None})
+    if dedup_article_ids:
+        await article_repo.drafts_collection.delete_many({"article_id": {"$in": dedup_article_ids}})
+
+    if book_object_id:
+        await summary_repo.collection.delete_many({"book_id": book_object_id})
+        await kb_repo.collection.delete_many(
+            {
+                "$or": [
+                    {"book_id": book_object_id},
+                    {"submission_id": submission_object_id},
+                ]
+            }
+        )
+        await article_repo.collection.delete_many(
+            {
+                "$or": [
+                    {"book_id": book_object_id},
+                    {"submission_id": submission_object_id},
+                ]
+            }
+        )
+        await book_repo.collection.delete_one({"_id": book_object_id})
+    else:
+        await kb_repo.collection.delete_many({"submission_id": submission_object_id})
+        await article_repo.collection.delete_many({"submission_id": submission_object_id})
+
+    deleted = await repo.delete(submission_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+
+    return {}
 
 
 @router.post("/{submission_id}/draft_article", status_code=status.HTTP_200_OK, summary="Save article draft")

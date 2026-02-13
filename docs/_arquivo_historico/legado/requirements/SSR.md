@@ -100,6 +100,90 @@ Gerar artigos estruturados e SEO-otimizados sobre livros a partir de fontes exte
 
 **RF-011** O scraping Amazon deve persistir metadados em `books` vinculados à submission.
 
+**RF-011A** O scraping Amazon deve extrair e persistir os seguintes campos em `books.extracted`:
+
+Observação: a lista de referência possui 16 campos (há duplicidade de numeração no item 8 da origem).
+
+1. `title` (Título do livro)
+- CSS: `#productTitle`
+- XPath: `//*[@id="productTitle"]`
+- JSPath: `document.querySelector("#productTitle")?.textContent.trim()`
+
+2. `original_title` (Título original do livro)
+- CSS: `#detailBullets_feature_div li span.a-text-bold:contains("Título original") + span`
+- XPath: `//*[@id="detailBullets_feature_div"]//li[.//span[@class="a-text-bold" and contains(normalize-space(.),"Título original")]]//span[@class="a-text-bold"]/following-sibling::span[1]`
+- JSPath: `Array.from(document.querySelectorAll("#detailBullets_feature_div li")).find(li => li.innerText.includes("Título original"))?.querySelector("span.a-text-bold + span")?.textContent.trim()`
+
+3. `authors` (Autor(es) do livro)
+- CSS: `#bylineInfo span.author a.a-link-normal`
+- XPath: `//*[@id="bylineInfo"]//span[contains(@class,"author")]//a`
+- JSPath: `Array.from(document.querySelectorAll("#bylineInfo span.author a.a-link-normal")).map(a => a.textContent.trim())`
+
+4. `language` (Idioma do livro)
+- CSS: `#detailBullets_feature_div li span.a-text-bold:contains("Idioma") + span`
+- XPath: `//*[@id="detailBullets_feature_div"]//li[.//span[@class="a-text-bold" and contains(normalize-space(.),"Idioma")]]//span[@class="a-text-bold"]/following-sibling::span[1]`
+- JSPath: `Array.from(document.querySelectorAll("#detailBullets_feature_div li")).find(li => li.innerText.includes("Idioma"))?.querySelector("span.a-text-bold + span")?.textContent.trim()`
+
+5. `original_language` (Idioma original do livro)
+- CSS: `#detailBullets_feature_div li span.a-text-bold:contains("Idioma original") + span`
+- XPath: `//*[@id="detailBullets_feature_div"]//li[.//span[@class="a-text-bold" and contains(normalize-space(.),"Idioma original")]]//span[@class="a-text-bold"]/following-sibling::span[1]`
+- JSPath: `Array.from(document.querySelectorAll("#detailBullets_feature_div li")).find(li => li.innerText.includes("Idioma original"))?.querySelector("span.a-text-bold + span")?.textContent.trim()`
+
+6. `edition` (Edição do livro)
+- CSS: `#detailBullets_feature_div li span.a-text-bold:contains("Edição") + span`
+- XPath: `//*[@id="detailBullets_feature_div"]//li[.//span[@class="a-text-bold" and contains(normalize-space(.),"Edição")]]//span[@class="a-text-bold"]/following-sibling::span[1]`
+- JSPath: `Array.from(document.querySelectorAll("#detailBullets_feature_div li")).find(li => li.innerText.includes("Edição"))?.querySelector("span.a-text-bold + span")?.textContent.trim()`
+
+7. `average_rating` (Avaliação média em estrelas)
+- CSS: `#acrPopover`
+- XPath: `//*[@id="acrPopover"]`
+- JSPath: `document.querySelector("#acrPopover")?.getAttribute("title")?.match(/[\d,\.]+/)?.[0]?.replace(",", ".")`
+
+8. `pages` (Número de páginas)
+- CSS: `#detailBullets_feature_div li span.a-text-bold:contains("Número de páginas") + span`
+- XPath: `//*[@id="detailBullets_feature_div"]//li[.//span[@class="a-text-bold" and contains(normalize-space(.),"Número de páginas")]]//span[@class="a-text-bold"]/following-sibling::span[1]`
+- JSPath: `Array.from(document.querySelectorAll("#detailBullets_feature_div li")).find(li => li.innerText.includes("Número de páginas"))?.querySelector("span.a-text-bold + span")?.textContent.trim()`
+
+9. `publisher` (Editora)
+- CSS: `#detailBullets_feature_div li span.a-text-bold:contains("Editora") + span`
+- XPath: `//*[@id="detailBullets_feature_div"]//li[.//span[@class="a-text-bold" and contains(normalize-space(.),"Editora")]]//span[@class="a-text-bold"]/following-sibling::span[1]`
+- JSPath: `Array.from(document.querySelectorAll("#detailBullets_feature_div li")).find(li => li.innerText.includes("Editora"))?.querySelector("span.a-text-bold + span")?.textContent.trim()`
+
+10. `publication_date` (Data de publicação)
+- CSS: `#detailBullets_feature_div li span.a-text-bold:contains("Data da publicação") + span`
+- XPath: `//*[@id="detailBullets_feature_div"]//li[.//span[@class="a-text-bold" and contains(normalize-space(.),"Data da publicação")]]//span[@class="a-text-bold"]/following-sibling::span[1]`
+- JSPath: `Array.from(document.querySelectorAll("#detailBullets_feature_div li")).find(li => li.innerText.includes("Data da publicação"))?.querySelector("span.a-text-bold + span")?.textContent.trim()`
+
+11. `asin` (ASIN)
+- CSS: `#detailBullets_feature_div li span.a-text-bold:contains("ASIN") + span`
+- XPath: `//*[@id="detailBullets_feature_div"]//li[.//span[@class="a-text-bold" and contains(normalize-space(.),"ASIN")]]//span[@class="a-text-bold"]/following-sibling::span[1]`
+- JSPath: `Array.from(document.querySelectorAll("#detailBullets_feature_div li")).find(li => li.innerText.includes("ASIN"))?.querySelector("span.a-text-bold + span")?.textContent.trim()`
+
+12. `isbn_10` (ISBN-10)
+- CSS: `#detailBullets_feature_div li span.a-text-bold:contains("ISBN-10") + span`
+- XPath: `//*[@id="detailBullets_feature_div"]//li[.//span[@class="a-text-bold" and contains(normalize-space(.),"ISBN-10")]]//span[@class="a-text-bold"]/following-sibling::span[1]`
+- JSPath: `Array.from(document.querySelectorAll("#detailBullets_feature_div li")).find(li => li.innerText.includes("ISBN-10"))?.querySelector("span.a-text-bold + span")?.textContent.trim()`
+
+13. `isbn_13` (ISBN-13)
+- CSS: `#detailBullets_feature_div li span.a-text-bold:contains("ISBN-13") + span`
+- XPath: `//*[@id="detailBullets_feature_div"]//li[.//span[@class="a-text-bold" and contains(normalize-space(.),"ISBN-13")]]//span[@class="a-text-bold"]/following-sibling::span[1]`
+- JSPath: `Array.from(document.querySelectorAll("#detailBullets_feature_div li")).find(li => li.innerText.includes("ISBN-13"))?.querySelector("span.a-text-bold + span")?.textContent.trim()`
+
+14. `price` (Preço do livro)
+- CSS: `#corePriceDisplay_desktop_feature_div span.priceToPay`
+- XPath: `//*[@id="corePriceDisplay_desktop_feature_div"]//span[contains(@class,"a-price")]`
+- JSPath: `(function(){ const w=document.querySelector('#corePriceDisplay_desktop_feature_div span.priceToPay span.a-price-whole')?.textContent||''; const f=document.querySelector('#corePriceDisplay_desktop_feature_div span.priceToPay span.a-price-fraction')?.textContent||''; return (w+ '.' +f).replace(/[^\d\.]/g,''); })()`
+
+15. `ebook_price` (Preço do ebook)
+- CSS: `#tmm-grid-swatch-KINDLE span.slot-price span[aria-label]`
+- XPath: `//*[@id="tmm-grid-swatch-KINDLE"]//span[contains(@class,"slot-price")]//span[@aria-label]`
+- JSPath: `document.querySelector('#tmm-grid-swatch-KINDLE span.slot-price span[aria-label]')?.getAttribute('aria-label')?.match(/[\d,\.]+/)?.[0]?.replace(",", ".")`
+
+16. `cover_image_url` (Link da imagem da capa)
+- CSS: `#landingImage`
+- XPath: `//*[@id="landingImage"]`
+- JSPath: `document.querySelector("#landingImage")?.getAttribute("data-old-hires") || document.querySelector("#landingImage")?.src`
+
 **RF-012** Em falha no scraping Amazon, a submission deve transitar para `scraping_failed` com diagnóstico.
 
 **RF-013** O pipeline deve executar enriquecimento Goodreads após Amazon.
@@ -250,7 +334,8 @@ Gerar artigos estruturados e SEO-otimizados sobre livros a partir de fontes exte
 - Campos mínimos: `_id`, `title`, `author_name`, `amazon_url`, `goodreads_url`, `author_site`, `other_links`, `textual_information`, `main_category`, `article_status`, `user_approval_required`, `run_immediately`, `schedule_execution`, `status`, `current_step`, `attempts`, `errors`, `created_at`, `updated_at`.
 
 **RD-002** `books`
-- Campos mínimos: `submission_id`, metadados Amazon, `goodreads_data`, `updated_at`.
+- Campos mínimos: `submission_id`, `updated_at`, `goodreads_data` e metadados Amazon estruturados em `extracted` com:
+  `title`, `original_title`, `authors`, `language`, `original_language`, `edition`, `average_rating`, `pages`, `publisher`, `publication_date`, `asin`, `isbn_10`, `isbn_13`, `price`, `ebook_price`, `cover_image_url`, `amazon_url`.
 
 **RD-003** `knowledge_base`
 - Campos mínimos: `submission_id/book_id`, `markdown_content`, `topics_index`, `created_at`, `updated_at`.
@@ -437,4 +522,3 @@ Gerar artigos estruturados e SEO-otimizados sobre livros a partir de fontes exte
 - API de LLM.
 - WordPress REST API.
 - Fontes web para scraping (Amazon/Goodreads e links externos).
-

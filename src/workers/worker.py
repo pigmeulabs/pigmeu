@@ -20,6 +20,12 @@ app.conf.update(
     task_ignore_result=True,
 )
 
+# Ensure shared tasks are imported and registered at worker startup.
+import src.workers.scraper_tasks  # noqa: E402,F401
+import src.workers.article_tasks  # noqa: E402,F401
+import src.workers.publishing_tasks  # noqa: E402,F401
+import src.workers.link_tasks  # noqa: E402,F401
+
 
 @app.task(name="ping")
 def ping():

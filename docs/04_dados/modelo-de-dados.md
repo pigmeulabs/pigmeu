@@ -29,7 +29,25 @@ Campos principais:
 ## `books`
 - `_id`
 - `submission_id` (ObjectId -> submissions)
-- `extracted` (objeto flexível com metadados do livro)
+- `extracted` (objeto com metadados do livro)
+  - `title`
+  - `original_title`
+  - `authors[]`
+  - `language`
+  - `original_language`
+  - `edition`
+  - `average_rating`
+  - `pages`
+  - `publisher`
+  - `publication_date`
+  - `asin`
+  - `isbn_10`
+  - `isbn_13`
+  - `price`
+  - `ebook_price`
+  - `cover_image_url`
+  - `amazon_url`
+  - `goodreads_data` (enriquecimento)
 - `last_updated`
 
 ## `summaries`
@@ -80,31 +98,42 @@ Campos principais:
 
 ## `credentials`
 - `_id`
-- `service`
+- `service` (enum)
 - `name`
-- `key`
+- `key` (segredo)
+- `username_email` (opcional)
 - `encrypted`
-- `username_email`
 - `active`
 - `created_at`
 - `updated_at`
 - `last_used_at`
 
+Observações de UI:
+- `service` define o tipo de credencial no modal (`Service`).
+- `name` alimenta identificação visual (`Credential Name`).
+- `key` nunca deve ser retornada em texto puro.
+
 ## `prompts`
 - `_id`
-- `name`
-- `purpose`
+- `name` (único)
 - `short_description`
-- `system_prompt`
-- `user_prompt`
+- `purpose`
+- `provider`
+- `credential_id` (ObjectId -> credentials)
 - `model_id`
 - `temperature`
 - `max_tokens`
+- `system_prompt`
+- `user_prompt`
 - `schema_example`
 - `active`
 - `version`
 - `created_at`
 - `updated_at`
+
+Observações de UI:
+- `provider`, `credential_id` e `model_id` suportam a configuração técnica do modal de prompts.
+- `system_prompt` e `user_prompt` devem ser exibíveis em modo expandido na listagem.
 
 ## Relacionamentos
 
@@ -113,3 +142,4 @@ Campos principais:
 - `books (1) -> (1) knowledge_base`
 - `books (1) -> (N) articles`
 - `articles (1) -> (1) articles_drafts`
+- `credentials (1) -> (N) prompts` (via `credential_id`)

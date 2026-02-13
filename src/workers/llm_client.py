@@ -29,6 +29,22 @@ class LLMClient:
         }
 
     @staticmethod
+    def _provider_base_url(provider: str) -> Optional[str]:
+        if provider == "groq":
+            return "https://api.groq.com/openai/v1"
+        if provider == "mistral":
+            return "https://api.mistral.ai/v1"
+        return None
+
+    @classmethod
+    def _build_client(cls, provider: str, api_key: str) -> AsyncOpenAI:
+        kwargs = {"api_key": api_key}
+        base_url = cls._provider_base_url(provider)
+        if base_url:
+            kwargs["base_url"] = base_url
+        return AsyncOpenAI(**kwargs)
+
+    @staticmethod
     def _select_provider(model_id: str, provider: Optional[str]) -> str:
         if provider:
             return provider
@@ -48,13 +64,15 @@ class LLMClient:
         temperature: float = 0.7,
         max_tokens: int = 1000,
         provider: Optional[str] = None,
+        api_key: Optional[str] = None,
+        allow_fallback: bool = True,
         **kwargs,
     ) -> str:
         selected_provider = self._select_provider(model_id=model_id, provider=provider)
-        client = self._clients.get(selected_provider)
+        client = self._build_client(selected_provider, api_key) if api_key else self._clients.get(selected_provider)
 
         # fallback order if selected provider is not configured
-        if client is None:
+        if client is None and allow_fallback:
             for fallback in ("openai", "groq", "mistral"):
                 if self._clients.get(fallback) is not None:
                     client = self._clients[fallback]

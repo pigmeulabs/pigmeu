@@ -13,9 +13,12 @@ docs/
 │   ├── visao-e-escopo.md
 │   └── glossario.md
 ├── 01_requisitos/
+│   ├── 00_wireframes/
+│   │   ├── wireframes.drawio
+│   │   └── *.png
 │   ├── requisitos-sistema.md
 │   ├── estados-e-transicoes-pipeline.md
-│   ├── ui-web.md
+│   ├── ui-web-especificacao-interfaces.md
 │   └── criterios-de-aceite.md
 ├── 02_arquitetura/
 │   ├── arquitetura-tecnica.md
