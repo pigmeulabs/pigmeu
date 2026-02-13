@@ -1,64 +1,51 @@
-# Documentação do Sistema PIGMEU
+# Documentacao Ativa do Sistema PIGMEU
 
-Atualizado em: 2026-02-12
+Atualizado em: 2026-02-13
 
-Este diretório contém a documentação oficial do estado atual do sistema, organizada por domínio funcional e técnico.
+Este diretorio contem a documentacao oficial e ativa do sistema. O conteudo foi consolidado a partir do estado atual do codigo fonte, dos fluxos implementados na API/workers/frontend e dos wireframes historicos de operacao.
 
-## Estrutura
+## Como esta documentacao esta organizada
 
-```text
-docs/
-├── README.md
-├── 00_contexto/
-│   ├── visao-e-escopo.md
-│   └── glossario.md
-├── 01_requisitos/
-│   ├── 00_wireframes/
-│   │   ├── wireframes.drawio
-│   │   └── *.png
-│   ├── requisitos-sistema.md
-│   ├── estados-e-transicoes-pipeline.md
-│   ├── ui-web-especificacao-interfaces.md
-│   └── criterios-de-aceite.md
-├── 02_arquitetura/
-│   ├── arquitetura-tecnica.md
-│   └── decisoes-tecnicas.md
-├── 03_api/
-│   ├── contratos-api.md
-│   └── erros-e-codigos.md
-├── 04_dados/
-│   ├── modelo-de-dados.md
-│   └── indices-e-migracoes.md
-├── 05_modulos/
-│   ├── tasks.md
-│   ├── credentials.md
-│   ├── prompts.md
-│   └── article-generation.md
-├── 06_operacao/
-│   ├── setup.md
-│   ├── ambiente-e-envvars.md
-│   ├── docker.md
-│   └── testes.md
-├── 07_ia-agentes/
-│   ├── contexto-para-agentes.md
-│   └── checklists.md
-└── _arquivo_historico/
-    ├── sessoes/
-    ├── rascunhos/
-    └── legado/
-```
+- `docs/arquitetura.md`
+  - documento unico de arquitetura tecnica, fluxos de ponta a ponta, componentes e trade-offs.
+- `docs/api.md`
+  - documento unico de contratos HTTP implementados na API FastAPI.
+- `docs/modelo-de-dados.md`
+  - documento unico de modelo de dados MongoDB, relacionamentos, indices e regras de persistencia.
+- `docs/requisitos.md`
+  - documento unico de requisitos funcionais, nao funcionais, regras de negocio e limites atuais.
+- `docs/modulos/`
+  - indice de modulos e um documento detalhado por modulo tecnico.
+- `docs/ui-ux/`
+  - documento principal de UI/UX e um documento por modulo/tela operacional.
+- `docs/workers/`
+  - documento principal e um documento por worker/task pipeline.
+- `docs/operacao/`
+  - setup, docker, env vars, execucao local e testes.
+- `docs/ia-agentes/`
+  - contexto tecnico objetivo para execucao por agentes e checklists operacionais.
 
-## Como usar esta documentação
+## Estado funcional documentado
 
-- Contexto e objetivos: `00_contexto/`
-- Requisitos e comportamento esperado: `01_requisitos/`
-- Arquitetura e decisões técnicas: `02_arquitetura/`
-- Contratos de API e erros: `03_api/`
-- Modelo de dados e índices: `04_dados/`
-- Documentação por módulo: `05_modulos/`
-- Operação local e execução: `06_operacao/`
-- Guias para agentes/IA: `07_ia-agentes/`
+A documentacao cobre o estado implementado em `src/`:
 
-## Histórico
+- Backend/API: `src/app.py`, `src/api/*`
+- Persistencia/Migracoes: `src/db/*`
+- Modelos e validacao: `src/models/*`
+- Workers assicronos: `src/workers/*`
+- Scrapers e integracoes externas: `src/scrapers/*`
+- Frontend web operacional: `src/static/*`
 
-Nenhuma documentação anterior foi excluída. Todo o conteúdo legado foi movido para `docs/_arquivo_historico/`.
+## Principios de leitura
+
+- Esta base descreve **o que existe hoje no codigo**, nao um roadmap idealizado.
+- Regras e comportamentos citados referenciam endpoints, tasks e campos reais.
+- Quando houver diferenca entre wireframe e implementacao, a implementacao atual tem precedencia e a diferenca e registrada em `docs/ui-ux/*`.
+
+## Conteudo obsoleto
+
+A documentacao legada foi movida para:
+
+- `docs/_obsoletos_nao_considerar_2026-02-13/`
+
+Esse conteudo e mantido apenas para historico e **nao deve ser utilizado como contexto ativo**.
