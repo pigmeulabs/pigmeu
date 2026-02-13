@@ -21,6 +21,7 @@ from src.api.dependencies import (
     get_summary_repo,
     get_knowledge_base_repo,
     get_article_repo,
+    get_pipeline_repo,
 )
 from src.db.repositories import (
     SubmissionRepository,
@@ -28,12 +29,14 @@ from src.db.repositories import (
     SummaryRepository,
     KnowledgeBaseRepository,
     ArticleRepository,
+    PipelineConfigRepository,
 )
 from src.models.enums import SubmissionStatus
 from src.workers.worker import start_pipeline
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 logger = logging.getLogger(__name__)
+BOOK_REVIEW_PIPELINE_ID = "book_review_v2"
 
 
 def _normalize_retry_stage(stage: str) -> Optional[str]:
@@ -311,9 +314,12 @@ def _serialize_submission(doc: Dict[str, Any]) -> Dict[str, Any]:
         "textual_information": doc.get("textual_information"),
         "run_immediately": doc.get("run_immediately", True),
         "schedule_execution": doc.get("schedule_execution"),
+        "pipeline_id": str(doc.get("pipeline_id") or BOOK_REVIEW_PIPELINE_ID),
         "main_category": doc.get("main_category"),
+        "content_schema_id": doc.get("content_schema_id"),
         "article_status": doc.get("article_status"),
         "user_approval_required": doc.get("user_approval_required", False),
+        "article_id": str(doc.get("article_id")) if doc.get("article_id") else None,
         "status": doc.get("status"),
         "created_at": doc.get("created_at"),
         "updated_at": doc.get("updated_at"),
@@ -374,6 +380,7 @@ async def get_task(
     summary_repo: SummaryRepository = Depends(get_summary_repo),
     kb_repo: KnowledgeBaseRepository = Depends(get_knowledge_base_repo),
     article_repo: ArticleRepository = Depends(get_article_repo),
+    pipeline_repo: PipelineConfigRepository = Depends(get_pipeline_repo),
 ):
     submission = await repo.get_by_id(submission_id)
     if not submission:
@@ -425,6 +432,30 @@ async def get_task(
         for item in summaries
     ]
 
+    pipeline_id = str(submission.get("pipeline_id") or BOOK_REVIEW_PIPELINE_ID)
+    pipeline_doc = await pipeline_repo.get_by_pipeline_id(pipeline_id)
+    pipeline_data = None
+    if pipeline_doc:
+        raw_steps = pipeline_doc.get("steps", []) if isinstance(pipeline_doc.get("steps"), list) else []
+        pipeline_data = {
+            "id": pipeline_id,
+            "name": pipeline_doc.get("name"),
+            "slug": pipeline_doc.get("slug"),
+            "description": pipeline_doc.get("description"),
+            "version": pipeline_doc.get("version"),
+            "steps": [
+                {
+                    "id": item.get("id"),
+                    "name": item.get("name"),
+                    "description": item.get("description"),
+                    "type": item.get("type"),
+                    "uses_ai": bool(item.get("uses_ai")),
+                    "delay_seconds": item.get("delay_seconds", 0),
+                }
+                for item in raw_steps
+            ],
+        }
+
     response = {
         "submission": _serialize_submission(submission),
         "book": book_data,
@@ -433,6 +464,7 @@ async def get_task(
         "article": article_data,
         "draft": draft,
         "progress": _build_progress(submission.get("status")),
+        "pipeline": pipeline_data,
     }
     return _sanitize_for_response(response)
 
@@ -495,7 +527,11 @@ async def retry_task(submission_id: str, repo: SubmissionRepository = Depends(ge
     )
 
     try:
-        start_pipeline.delay(submission_id=submission_id, amazon_url=submission.get("amazon_url"))
+        start_pipeline.delay(
+            submission_id=submission_id,
+            amazon_url=submission.get("amazon_url"),
+            pipeline_id=str(submission.get("pipeline_id") or BOOK_REVIEW_PIPELINE_ID),
+        )
     except Exception as e:
         logger.error("Failed to enqueue retry pipeline: %s", e, exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to queue retry")

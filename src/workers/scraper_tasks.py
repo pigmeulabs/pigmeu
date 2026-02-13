@@ -33,6 +33,8 @@ BOOK_REVIEW_PIPELINE_ID = "book_review_v2"
 LINK_BIBLIO_PROMPT = {
     "name": "Book Review - Additional Link Bibliographic Extractor",
     "purpose": "book_review_link_bibliography_extract",
+    "category": "Book Review",
+    "provider": "mistral",
     "short_description": "Extrai metadados bibliograficos de conteudo de links adicionais.",
     "model_id": "mistral-large-latest",
     "temperature": 0.1,
@@ -100,6 +102,8 @@ LINK_BIBLIO_PROMPT = {
 LINK_SUMMARY_PROMPT = {
     "name": "Book Review - Additional Link Summary",
     "purpose": "book_review_link_summary",
+    "category": "Book Review",
+    "provider": "groq",
     "short_description": "Resume links adicionais com foco em livro e autor.",
     "model_id": "llama-3.3-70b-versatile",
     "temperature": 0.3,
@@ -107,6 +111,7 @@ LINK_SUMMARY_PROMPT = {
     "system_prompt": (
         "You summarize web content for editorial book research. "
         "Focus strictly on insights about the book and author. "
+        "Preserve factual accuracy and avoid invented claims. "
         "Respond in Portuguese (pt-BR). Return strict JSON only."
     ),
     "user_prompt": (
@@ -117,7 +122,8 @@ LINK_SUMMARY_PROMPT = {
         "Source content:\n{{content}}\n\n"
         "Rules:\n"
         "- Focus only on relevant information about the book and author.\n"
-        "- Keep summary objective and factual.\n"
+        "- Keep summary objective, factual and useful for writing an analytical review article.\n"
+        "- Highlight practical insights, target audience clues and concrete examples when present.\n"
         "- Respond in Portuguese (pt-BR).\n"
         "- Return only the JSON object."
     ),
@@ -126,6 +132,7 @@ LINK_SUMMARY_PROMPT = {
         '  "summary": "string",\n'
         '  "topics": ["string"],\n'
         '  "key_points": ["string"],\n'
+        '  "reader_intent_clues": ["string"],\n'
         '  "credibility": "alta|media|baixa"\n'
         "}"
     ),
@@ -134,6 +141,7 @@ LINK_SUMMARY_PROMPT = {
         '  "summary": "O conteúdo destaca os principais conceitos do livro e relaciona os argumentos com a trajetória do autor.",\n'
         '  "topics": ["gestão ágil", "kanban", "melhoria contínua"],\n'
         '  "key_points": ["Explica fundamentos práticos", "Compara abordagens", "Apresenta exemplos reais"],\n'
+        '  "reader_intent_clues": ["busca por implementação prática", "comparação entre abordagens ágeis"],\n'
         '  "credibility": "media"\n'
         "}"
     ),
@@ -142,13 +150,17 @@ LINK_SUMMARY_PROMPT = {
 WEB_RESEARCH_PROMPT = {
     "name": "Book Review - Web Research",
     "purpose": "book_review_web_research",
-    "short_description": "Pesquisa web sobre temas e contexto do livro/autor.",
+    "category": "Book Review",
+    "provider": "groq",
+    "short_description": "Pesquisa web sobre temas, contexto e intenção editorial do livro/autor.",
     "model_id": "llama-3.3-70b-versatile",
     "temperature": 0.25,
     "max_tokens": 1100,
     "system_prompt": (
         "You are a literary research analyst. "
         "Synthesize topics, themes, and context about the book and author from web source excerpts. "
+        "Do not invent unsupported claims. "
+        "Organize output for downstream article writing. "
         "Respond in Portuguese (pt-BR). Return strict JSON only."
     ),
     "user_prompt": (
@@ -159,6 +171,8 @@ WEB_RESEARCH_PROMPT = {
         "Rules:\n"
         "- Prioritize themes, contexts, and discussion points useful for editorial analysis.\n"
         "- Keep statements grounded in provided sources.\n"
+        "- Highlight practical applicability and reader value signals.\n"
+        "- Include FAQ candidates and related SEO terms when possible.\n"
         "- Respond in Portuguese (pt-BR).\n"
         "- Return only the JSON object."
     ),
@@ -166,14 +180,18 @@ WEB_RESEARCH_PROMPT = {
         "{\n"
         '  "research_markdown": "string (markdown)",\n'
         '  "topics": ["string"],\n'
-        '  "key_insights": ["string"]\n'
+        '  "key_insights": ["string"],\n'
+        '  "seo_terms": ["string"],\n'
+        '  "faq_candidates": ["string"]\n'
         "}"
     ),
     "schema_example": (
         "{\n"
         '  "research_markdown": "## Pesquisa Web\\n\\n### Temas recorrentes\\n- Tema 1\\n- Tema 2",\n'
         '  "topics": ["tema 1", "tema 2", "tema 3"],\n'
-        '  "key_insights": ["Insight objetivo 1", "Insight objetivo 2"]\n'
+        '  "key_insights": ["Insight objetivo 1", "Insight objetivo 2"],\n'
+        '  "seo_terms": ["resenha técnica", "vale a pena ler"],\n'
+        '  "faq_candidates": ["O livro é indicado para iniciantes?"]\n'
         "}"
     ),
 }
@@ -189,12 +207,12 @@ class ScraperTask(Task):
     retry_jitter = True
 
 
-async def _get_step_delay_seconds(step_id: str) -> int:
+async def _get_step_delay_seconds(step_id: str, pipeline_id: str = BOOK_REVIEW_PIPELINE_ID) -> int:
     """Resolve configured delay (in seconds) for a pipeline step."""
     try:
         db = await get_db()
         pipeline_repo = PipelineConfigRepository(db)
-        pipeline_doc = await pipeline_repo.get_by_pipeline_id(BOOK_REVIEW_PIPELINE_ID)
+        pipeline_doc = await pipeline_repo.get_by_pipeline_id(str(pipeline_id or BOOK_REVIEW_PIPELINE_ID))
         if not pipeline_doc:
             return 0
 
@@ -390,6 +408,8 @@ async def _ensure_prompt(prompt_repo: PromptRepository, prompt_data: Dict[str, A
     payload = {
         "name": prompt_data["name"],
         "purpose": prompt_data["purpose"],
+        "category": prompt_data.get("category", "Book Review"),
+        "provider": str(prompt_data.get("provider") or "openai").strip().lower() or "openai",
         "short_description": prompt_data["short_description"],
         "system_prompt": prompt_data["system_prompt"],
         "user_prompt": prompt_data["user_prompt"],
@@ -594,7 +614,12 @@ async def _run_web_research(
 
 
 @shared_task(base=ScraperTask, bind=True)
-def scrape_amazon_task(self, submission_id: str, amazon_url: str) -> Dict[str, Any]:
+def scrape_amazon_task(
+    self,
+    submission_id: str,
+    amazon_url: str,
+    pipeline_id: str = BOOK_REVIEW_PIPELINE_ID,
+) -> Dict[str, Any]:
     """Scrape Amazon metadata and persist into books collection."""
 
     async def _run() -> Dict[str, Any]:
@@ -605,6 +630,9 @@ def scrape_amazon_task(self, submission_id: str, amazon_url: str) -> Dict[str, A
         submission = await submission_repo.get_by_id(submission_id)
         if not submission:
             return {"status": "error", "error": "submission_not_found"}
+        resolved_pipeline_id = str(
+            pipeline_id or submission.get("pipeline_id") or BOOK_REVIEW_PIPELINE_ID
+        )
 
         await submission_repo.update_status(
             submission_id,
@@ -612,7 +640,7 @@ def scrape_amazon_task(self, submission_id: str, amazon_url: str) -> Dict[str, A
             {
                 "current_step": "amazon_scrape",
                 "started_at": datetime.utcnow(),
-                "pipeline_version": "book_review_v2",
+                "pipeline_version": resolved_pipeline_id,
             },
         )
 
@@ -638,7 +666,7 @@ def scrape_amazon_task(self, submission_id: str, amazon_url: str) -> Dict[str, A
                 {
                     "current_step": "amazon_scrape",
                     "errors": [message],
-                    "pipeline_version": "book_review_v2",
+                    "pipeline_version": resolved_pipeline_id,
                 },
             )
             return {"status": "error", "error": "amazon_scrape_failed", "message": message}
@@ -650,11 +678,11 @@ def scrape_amazon_task(self, submission_id: str, amazon_url: str) -> Dict[str, A
             {
                 "current_step": "additional_links_processing",
                 "book_id": book_id,
-                "pipeline_version": "book_review_v2",
+                "pipeline_version": resolved_pipeline_id,
             },
         )
 
-        next_delay = await _get_step_delay_seconds("amazon_scrape")
+        next_delay = await _get_step_delay_seconds("amazon_scrape", resolved_pipeline_id)
         _enqueue_task(process_additional_links_task, next_delay, submission_id=submission_id)
         return {"status": "ok", "book_id": book_id}
 
@@ -676,6 +704,7 @@ def process_additional_links_task(self, submission_id: str) -> Dict[str, Any]:
         submission = await submission_repo.get_by_id(submission_id)
         if not submission:
             return {"status": "error", "error": "submission_not_found"}
+        pipeline_id = str(submission.get("pipeline_id") or BOOK_REVIEW_PIPELINE_ID)
 
         book = await book_repo.get_by_submission(submission_id)
         if not book:
@@ -707,7 +736,7 @@ def process_additional_links_task(self, submission_id: str) -> Dict[str, Any]:
                     "links_processed": 0,
                 },
             )
-            next_delay = await _get_step_delay_seconds("summarize_additional_links")
+            next_delay = await _get_step_delay_seconds("summarize_additional_links", pipeline_id)
             _enqueue_task(consolidate_bibliographic_task, next_delay, submission_id=submission_id)
             return {"status": "ok", "links_total": 0, "links_processed": 0}
 
@@ -778,7 +807,7 @@ def process_additional_links_task(self, submission_id: str) -> Dict[str, Any]:
             },
         )
 
-        next_delay = await _get_step_delay_seconds("summarize_additional_links")
+        next_delay = await _get_step_delay_seconds("summarize_additional_links", pipeline_id)
         _enqueue_task(consolidate_bibliographic_task, next_delay, submission_id=submission_id)
         return {"status": "ok", "links_total": len(links), "links_processed": processed}
 
@@ -798,6 +827,7 @@ def consolidate_bibliographic_task(self, submission_id: str) -> Dict[str, Any]:
         submission = await submission_repo.get_by_id(submission_id)
         if not submission:
             return {"status": "error", "error": "submission_not_found"}
+        pipeline_id = str(submission.get("pipeline_id") or BOOK_REVIEW_PIPELINE_ID)
 
         book = await book_repo.get_by_submission(submission_id)
         if not book:
@@ -834,7 +864,7 @@ def consolidate_bibliographic_task(self, submission_id: str) -> Dict[str, Any]:
             {"current_step": "internet_research"},
         )
 
-        next_delay = await _get_step_delay_seconds("consolidate_book_data")
+        next_delay = await _get_step_delay_seconds("consolidate_book_data", pipeline_id)
         _enqueue_task(internet_research_task, next_delay, submission_id=submission_id)
         return {"status": "ok", "consolidated_sources_count": len(candidates)}
 
@@ -855,6 +885,7 @@ def internet_research_task(self, submission_id: str) -> Dict[str, Any]:
         submission = await submission_repo.get_by_id(submission_id)
         if not submission:
             return {"status": "error", "error": "submission_not_found"}
+        pipeline_id = str(submission.get("pipeline_id") or BOOK_REVIEW_PIPELINE_ID)
 
         book = await book_repo.get_by_submission(submission_id)
         if not book:
@@ -928,7 +959,7 @@ def internet_research_task(self, submission_id: str) -> Dict[str, Any]:
             SubmissionStatus.CONTEXT_GENERATION,
             {"current_step": "context_generation"},
         )
-        next_delay = await _get_step_delay_seconds("internet_research")
+        next_delay = await _get_step_delay_seconds("internet_research", pipeline_id)
         _enqueue_task(generate_context_task, next_delay, submission_id=submission_id)
 
         return {"status": "ok", "sources_count": len(source_blobs)}
@@ -951,6 +982,7 @@ def generate_context_task(self, submission_id: str) -> Dict[str, Any]:
         submission = await submission_repo.get_by_id(submission_id)
         if not submission:
             return {"status": "error", "error": "submission_not_found"}
+        pipeline_id = str(submission.get("pipeline_id") or BOOK_REVIEW_PIPELINE_ID)
 
         book = await book_repo.get_by_submission(submission_id)
         if not book:
@@ -1058,7 +1090,24 @@ def generate_context_task(self, submission_id: str) -> Dict[str, Any]:
             {"current_step": "context_generated"},
         )
 
-        return {"status": "ok"}
+        # Auto-chain article generation after context is ready.
+        next_delay = await _get_step_delay_seconds("article_generation", pipeline_id)
+        await submission_repo.update_status(
+            submission_id,
+            SubmissionStatus.PENDING_ARTICLE,
+            {"current_step": "pending_article"},
+        )
+        from src.workers.article_tasks import generate_article_task
+
+        # Delay is already resolved here from pipeline step. Skip internal delay re-scheduling in article task.
+        _enqueue_task(
+            generate_article_task,
+            next_delay,
+            submission_id=submission_id,
+            skip_config_delay=True,
+        )
+
+        return {"status": "ok", "article_generation_queued": True, "article_generation_delay_seconds": next_delay}
 
     return asyncio.run(_run())
 
@@ -1085,6 +1134,14 @@ def check_scraping_status(self, submission_id: str) -> Dict[str, Any]:
     return asyncio.run(_run())
 
 
-def start_scraping_pipeline(submission_id: str, amazon_url: str) -> None:
+def start_scraping_pipeline(
+    submission_id: str,
+    amazon_url: str,
+    pipeline_id: str = BOOK_REVIEW_PIPELINE_ID,
+) -> None:
     """Start scraping pipeline by queueing Amazon task."""
-    scrape_amazon_task.delay(submission_id=submission_id, amazon_url=amazon_url)
+    scrape_amazon_task.delay(
+        submission_id=submission_id,
+        amazon_url=amazon_url,
+        pipeline_id=pipeline_id,
+    )

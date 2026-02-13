@@ -50,7 +50,9 @@ class SubmissionRepository:
         textual_information: Optional[str] = None,
         run_immediately: bool = True,
         schedule_execution: Optional[datetime] = None,
+        pipeline_id: str = "book_review_v2",
         main_category: Optional[str] = None,
+        content_schema_id: Optional[str] = None,
         article_status: Optional[str] = None,
         user_approval_required: bool = False,
         status: Union[str, SubmissionStatus] = SubmissionStatus.PENDING_SCRAPE,
@@ -68,7 +70,9 @@ class SubmissionRepository:
             "textual_information": textual_information,
             "run_immediately": bool(run_immediately),
             "schedule_execution": schedule_execution,
+            "pipeline_id": str(pipeline_id or "book_review_v2"),
             "main_category": main_category,
+            "content_schema_id": content_schema_id,
             "article_status": article_status,
             "user_approval_required": bool(user_approval_required),
             "status": status_value,
@@ -481,6 +485,7 @@ class CredentialRepository:
         key: str,
         encrypted: bool = True,
         name: Optional[str] = None,
+        url: Optional[str] = None,
         username_email: Optional[str] = None,
         active: bool = True,
     ) -> str:
@@ -488,6 +493,7 @@ class CredentialRepository:
         document = {
             "service": service,
             "name": name or service,
+            "url": url,
             "key": key,
             "encrypted": bool(encrypted),
             "username_email": username_email,
@@ -573,15 +579,68 @@ class PromptRepository:
         limit: int = 100,
         active: Optional[bool] = None,
         purpose: Optional[str] = None,
+        category: Optional[str] = None,
+        provider: Optional[str] = None,
+        name: Optional[str] = None,
         search: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        query: Dict[str, Any] = {}
+        base_query: Dict[str, Any] = {}
+        conditions: List[Dict[str, Any]] = []
+
         if active is not None:
-            query["active"] = active
+            base_query["active"] = active
         if purpose:
-            query["purpose"] = purpose
-        if search:
-            query["name"] = {"$regex": search, "$options": "i"}
+            base_query["purpose"] = purpose
+        if category:
+            normalized_category = str(category).strip()
+            if normalized_category.lower() == "book review":
+                conditions.append(
+                    {
+                        "$or": [
+                            {"category": normalized_category},
+                            {"category": {"$exists": False}},
+                            {"category": None},
+                            {"category": ""},
+                        ]
+                    }
+                )
+            else:
+                conditions.append({"category": normalized_category})
+        if provider:
+            normalized_provider = str(provider).strip().lower()
+            provider_conditions: List[Dict[str, Any]] = [{"provider": normalized_provider}]
+            missing_provider_filter = {"$or": [{"provider": {"$exists": False}}, {"provider": None}, {"provider": ""}]}
+
+            if normalized_provider == "mistral":
+                provider_conditions.append({"$and": [missing_provider_filter, {"model_id": {"$regex": r"^mistral", "$options": "i"}}]})
+            elif normalized_provider == "claude":
+                provider_conditions.append({"$and": [missing_provider_filter, {"model_id": {"$regex": r"^claude", "$options": "i"}}]})
+            elif normalized_provider == "groq":
+                provider_conditions.append(
+                    {"$and": [missing_provider_filter, {"model_id": {"$regex": r"^(llama|mixtral)", "$options": "i"}}]}
+                )
+            elif normalized_provider == "openai":
+                provider_conditions.append(
+                    {
+                        "$and": [
+                            missing_provider_filter,
+                            {"model_id": {"$not": {"$regex": r"^(mistral|claude|llama|mixtral)", "$options": "i"}}},
+                        ]
+                    }
+                )
+
+            conditions.append({"$or": provider_conditions})
+        if name:
+            base_query["name"] = {"$regex": name, "$options": "i"}
+        if search and not name:
+            base_query["name"] = {"$regex": search, "$options": "i"}
+
+        if conditions:
+            if base_query:
+                conditions.insert(0, base_query)
+            query: Dict[str, Any] = {"$and": conditions}
+        else:
+            query = base_query
 
         return (
             await self.collection.find(query)
@@ -616,6 +675,62 @@ class PromptRepository:
 
     async def delete(self, prompt_id: Union[str, ObjectId]) -> bool:
         object_id = _to_object_id(prompt_id)
+        if not object_id:
+            return False
+        result = await self.collection.delete_one({"_id": object_id})
+        return result.deleted_count > 0
+
+
+class ContentSchemaRepository:
+    """Repository for content schema configuration documents."""
+
+    def __init__(self, db: AsyncIOMotorDatabase):
+        self.collection = db["content_schemas"]
+
+    async def create(self, payload: Dict[str, Any]) -> str:
+        now = utcnow()
+        doc = {
+            **payload,
+            "active": payload.get("active", True),
+            "created_at": now,
+            "updated_at": now,
+        }
+        result = await self.collection.insert_one(doc)
+        return str(result.inserted_id)
+
+    async def list_all(
+        self,
+        active: Optional[bool] = None,
+        target_type: Optional[str] = None,
+        search: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        query: Dict[str, Any] = {}
+        if active is not None:
+            query["active"] = bool(active)
+        if target_type:
+            query["target_type"] = str(target_type)
+        if search:
+            query["name"] = {"$regex": search, "$options": "i"}
+
+        return await self.collection.find(query).sort("updated_at", DESCENDING).to_list(length=None)
+
+    async def get_by_id(self, schema_id: Union[str, ObjectId]) -> Optional[Dict[str, Any]]:
+        object_id = _to_object_id(schema_id)
+        if not object_id:
+            return None
+        return await self.collection.find_one({"_id": object_id})
+
+    async def update(self, schema_id: Union[str, ObjectId], fields: Dict[str, Any]) -> bool:
+        object_id = _to_object_id(schema_id)
+        if not object_id:
+            return False
+
+        payload = {**fields, "updated_at": utcnow()}
+        result = await self.collection.update_one({"_id": object_id}, {"$set": payload})
+        return result.modified_count > 0
+
+    async def delete(self, schema_id: Union[str, ObjectId]) -> bool:
+        object_id = _to_object_id(schema_id)
         if not object_id:
             return False
         result = await self.collection.delete_one({"_id": object_id})

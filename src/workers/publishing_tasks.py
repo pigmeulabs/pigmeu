@@ -130,6 +130,7 @@ def publish_article_task(self, article_id: str, submission_id: str | None = None
 
         cred_doc = await cred_repo.get_active("wordpress")
         if cred_doc:
+            wp_url = cred_doc.get("url") or wp_url
             wp_user = cred_doc.get("username_email") or wp_user
             wp_pass = cred_doc.get("key") or wp_pass
             if isinstance(cred_doc.get("name"), str) and cred_doc.get("name", "").startswith("http"):

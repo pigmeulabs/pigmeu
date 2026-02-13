@@ -17,7 +17,15 @@ def build_user_prompt_with_output_format(base_prompt: str, prompt_doc: Dict[str,
             "If JSON is requested, return only valid JSON."
         )
 
+    language_guard = (
+        "Mandatory language policy:\n"
+        "- Write the response in Brazilian Portuguese (pt-BR).\n"
+        "- Keep only proper nouns, book titles, URLs and identifiers in their original form.\n"
+        "- Do not answer in English.\n"
+    )
+
     suffix = (
+        f"{language_guard}\n"
         "Expected output format:\n"
         f"{output_format}\n\n"
         "Follow this format strictly and do not include extra commentary."

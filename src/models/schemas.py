@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 
 from pydantic import BaseModel, HttpUrl, Field, field_validator, model_validator
 
 from src.models.enums import SubmissionStatus, ArticleStatus, ServiceType
+from src.workers.ai_defaults import DEFAULT_PROVIDER
 
 
 class SubmissionCreate(BaseModel):
@@ -21,7 +22,9 @@ class SubmissionCreate(BaseModel):
     textual_information: Optional[str] = None
     run_immediately: bool = True
     schedule_execution: Optional[datetime] = None
+    pipeline_id: str = Field("book_review_v2", min_length=1, max_length=120)
     main_category: Optional[str] = None
+    content_schema_id: Optional[str] = None
     article_status: Optional[str] = None
     user_approval_required: bool = False
 
@@ -53,7 +56,9 @@ class SubmissionResponse(BaseModel):
     textual_information: Optional[str] = None
     run_immediately: bool = True
     schedule_execution: Optional[datetime] = None
+    pipeline_id: str = "book_review_v2"
     main_category: Optional[str] = None
+    content_schema_id: Optional[str] = None
     article_status: Optional[str] = None
     user_approval_required: bool = False
 
@@ -146,6 +151,7 @@ class CredentialCreate(BaseModel):
     key: str = Field(..., min_length=1)
     encrypted: bool = True
     name: Optional[str] = None
+    url: Optional[str] = None
     username_email: Optional[str] = None
     active: bool = True
 
@@ -155,6 +161,7 @@ class CredentialUpdate(BaseModel):
 
     key: Optional[str] = None
     name: Optional[str] = None
+    url: Optional[str] = None
     username_email: Optional[str] = None
     active: Optional[bool] = None
 
@@ -164,6 +171,8 @@ class PromptCreate(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=255)
     purpose: str
+    category: str = Field("Book Review", min_length=1, max_length=120)
+    provider: str = Field(DEFAULT_PROVIDER, min_length=1, max_length=80)
     short_description: Optional[str] = None
     system_prompt: str
     user_prompt: str
@@ -180,6 +189,8 @@ class PromptUpdate(BaseModel):
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     purpose: Optional[str] = None
+    category: Optional[str] = Field(None, min_length=1, max_length=120)
+    provider: Optional[str] = Field(None, min_length=1, max_length=80)
     short_description: Optional[str] = None
     system_prompt: Optional[str] = None
     user_prompt: Optional[str] = None
@@ -197,6 +208,8 @@ class PromptResponse(BaseModel):
     id: str
     name: str
     purpose: str
+    category: str = "Book Review"
+    provider: str = DEFAULT_PROVIDER
     short_description: Optional[str] = None
     system_prompt: str
     user_prompt: str
@@ -205,6 +218,104 @@ class PromptResponse(BaseModel):
     max_tokens: int
     expected_output_format: Optional[str] = None
     schema_example: Optional[str] = None
+    active: bool = True
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        populate_by_name = True
+
+
+class ContentSchemaTocItem(BaseModel):
+    """TOC item configuration for article generation schema."""
+
+    level: Literal["h2", "h3"] = "h2"
+    title_template: str = Field(..., min_length=1, max_length=255)
+    content_mode: Literal["specific", "dynamic"] = "dynamic"
+    specific_content_hint: Optional[str] = None
+    min_paragraphs: Optional[int] = Field(None, ge=0)
+    max_paragraphs: Optional[int] = Field(None, ge=0)
+    min_words: Optional[int] = Field(None, ge=0)
+    max_words: Optional[int] = Field(None, ge=0)
+    source_fields: List[str] = Field(default_factory=list)
+    prompt_id: Optional[str] = None
+    position: int = Field(0, ge=0)
+
+    @model_validator(mode="after")
+    def validate_ranges(self):
+        if (
+            self.min_paragraphs is not None
+            and self.max_paragraphs is not None
+            and self.max_paragraphs < self.min_paragraphs
+        ):
+            raise ValueError("max_paragraphs must be greater than or equal to min_paragraphs")
+
+        if self.min_words is not None and self.max_words is not None and self.max_words < self.min_words:
+            raise ValueError("max_words must be greater than or equal to min_words")
+
+        return self
+
+
+class ContentSchemaCreate(BaseModel):
+    """Schema for creating a content schema document."""
+
+    name: str = Field(..., min_length=1, max_length=255)
+    target_type: str = Field("book_review", min_length=1, max_length=100)
+    description: Optional[str] = None
+    min_total_words: Optional[int] = Field(None, ge=0)
+    max_total_words: Optional[int] = Field(None, ge=0)
+    toc_template: List[ContentSchemaTocItem] = Field(default_factory=list)
+    internal_links_count: int = Field(0, ge=0)
+    external_links_count: int = Field(0, ge=0)
+    active: bool = True
+
+    @model_validator(mode="after")
+    def validate_total_word_range(self):
+        if (
+            self.min_total_words is not None
+            and self.max_total_words is not None
+            and self.max_total_words < self.min_total_words
+        ):
+            raise ValueError("max_total_words must be greater than or equal to min_total_words")
+        return self
+
+
+class ContentSchemaUpdate(BaseModel):
+    """Schema for updating content schema fields."""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    target_type: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = None
+    min_total_words: Optional[int] = Field(None, ge=0)
+    max_total_words: Optional[int] = Field(None, ge=0)
+    toc_template: Optional[List[ContentSchemaTocItem]] = None
+    internal_links_count: Optional[int] = Field(None, ge=0)
+    external_links_count: Optional[int] = Field(None, ge=0)
+    active: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def validate_total_word_range(self):
+        if (
+            self.min_total_words is not None
+            and self.max_total_words is not None
+            and self.max_total_words < self.min_total_words
+        ):
+            raise ValueError("max_total_words must be greater than or equal to min_total_words")
+        return self
+
+
+class ContentSchemaResponse(BaseModel):
+    """Schema for content schema response."""
+
+    id: str
+    name: str
+    target_type: str
+    description: Optional[str] = None
+    min_total_words: Optional[int] = None
+    max_total_words: Optional[int] = None
+    toc_template: List[ContentSchemaTocItem] = Field(default_factory=list)
+    internal_links_count: int = 0
+    external_links_count: int = 0
     active: bool = True
     created_at: datetime
     updated_at: Optional[datetime] = None

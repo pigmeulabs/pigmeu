@@ -184,14 +184,23 @@
                                     </div>
 
                                     <div class="form-group">
+                                        <label for="main_category_credential" class="form-label">WordPress Credential</label>
+                                        <select id="main_category_credential" class="form-input">
+                                            <option value="">Loading credentials...</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="form-group">
                                         <label for="main_category" class="form-label">Main Category</label>
                                         <select id="main_category" name="main_category" class="form-input">
-                                            <option value="">Select category</option>
-                                            <option value="technology">Technology</option>
-                                            <option value="business">Business</option>
-                                            <option value="design">Design</option>
-                                            <option value="productivity">Productivity</option>
-                                            <option value="leadership">Leadership</option>
+                                            <option value="">Select credential first</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="content_schema_id" class="form-label">Content Schema</label>
+                                        <select id="content_schema_id" name="content_schema_id" class="form-input">
+                                            <option value="">Loading schemas...</option>
                                         </select>
                                     </div>
 
@@ -288,9 +297,83 @@
                 <section id="content-schemas-section" class="section">
                     <div class="section-header">
                         <h2>Content Schemas</h2>
+                        <div class="controls">
+                            <button id="create-content-schema-btn" class="btn btn-primary">Create Content Schema</button>
+                        </div>
                     </div>
                     <div class="module-panel">
-                        <p class="text-muted">Module coming soon.</p>
+                        <ul id="content-schema-list" class="items-list">
+                            <li class="empty-state">No content schemas configured</li>
+                        </ul>
+                        <div id="content-schema-result" class="form-result"></div>
+                    </div>
+
+                    <div id="content-schema-editor-panel" class="module-panel content-schema-editor-panel">
+                        <h3 id="content-schema-modal-title">Create Content Schema</h3>
+                        <form id="content-schema-form" class="modal-form">
+                            <div class="form-group">
+                                <label for="content-schema-name" class="form-label">Schema Name *</label>
+                                <input type="text" id="content-schema-name" name="name" class="form-input" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="content-schema-target-type" class="form-label">Usage Type</label>
+                                <select id="content-schema-target-type" name="target_type" class="form-input">
+                                    <option value="book_review">Book Review</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="content-schema-description" class="form-label">Description</label>
+                                <textarea id="content-schema-description" name="description" class="form-textarea" rows="3"></textarea>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="content-schema-min-total-words" class="form-label">Min Total Words</label>
+                                    <input type="number" id="content-schema-min-total-words" name="min_total_words" class="form-input" min="0" step="1" placeholder="Ex: 1500">
+                                </div>
+                                <div class="form-group">
+                                    <label for="content-schema-max-total-words" class="form-label">Max Total Words</label>
+                                    <input type="number" id="content-schema-max-total-words" name="max_total_words" class="form-input" min="0" step="1" placeholder="Ex: 2500">
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="content-schema-internal-links" class="form-label">Internal Links Count</label>
+                                    <input type="number" id="content-schema-internal-links" name="internal_links_count" class="form-input" min="0" step="1" value="0">
+                                </div>
+                                <div class="form-group">
+                                    <label for="content-schema-external-links" class="form-label">External Links Count</label>
+                                    <input type="number" id="content-schema-external-links" name="external_links_count" class="form-input" min="0" step="1" value="0">
+                                </div>
+                            </div>
+
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="content-schema-active" name="active" checked> Active
+                            </label>
+
+                            <div class="toc-header-row">
+                                <h4 class="toc-title">TOC Template (H2/H3)</h4>
+                                <button id="add-toc-item-btn" type="button" class="btn btn-secondary btn-xs">Add Item</button>
+                            </div>
+
+                            <div id="toc-items-container" class="toc-items-container"></div>
+
+                            <div class="task-actions">
+                                <button id="content-schema-save-btn" type="submit" class="btn btn-primary btn-icon-only" aria-label="Save content schema" title="Save content schema">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                        <path d="M5 3h12l4 4v14H5z"></path>
+                                        <path d="M8 3v6h8V3"></path>
+                                        <path d="M9 21v-6h6v6"></path>
+                                    </svg>
+                                    <span class="sr-only">Save content schema</span>
+                                </button>
+                                <button id="content-schema-cancel-btn" type="button" class="btn btn-secondary">Cancel</button>
+                            </div>
+                            <div id="content-schema-form-result" class="form-result"></div>
+                        </form>
                     </div>
                 </section>
 
@@ -303,6 +386,21 @@
                     </div>
 
                     <div class="module-panel">
+                        <div class="filters">
+                            <select id="prompt-filter-category" class="filter-select" aria-label="Filter prompts by category">
+                                <option value="">All categories</option>
+                            </select>
+                            <select id="prompt-filter-provider" class="filter-select" aria-label="Filter prompts by provider">
+                                <option value="">All providers</option>
+                            </select>
+                            <input
+                                id="prompt-filter-name"
+                                type="search"
+                                class="search-input"
+                                placeholder="Search by prompt name"
+                                aria-label="Search prompts by name"
+                            >
+                        </div>
                         <ul id="prompt-list" class="items-list">
                             <li class="empty-state">No prompts configured</li>
                         </ul>
@@ -360,6 +458,11 @@
                 </div>
 
                 <div class="form-group">
+                    <label for="cred-url" class="form-label">Base URL</label>
+                    <input type="url" id="cred-url" name="url" class="form-input" placeholder="https://analisederequisitos.com.br">
+                </div>
+
+                <div class="form-group">
                     <label for="cred-key" class="form-label">API Key *</label>
                     <input type="password" id="cred-key" name="key" class="form-input" required>
                 </div>
@@ -405,6 +508,24 @@
                 <div class="form-group">
                     <label for="prompt-purpose" class="form-label">Purpose</label>
                     <input type="text" id="prompt-purpose" name="purpose" class="form-input" placeholder="context / article / summarization">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="prompt-category" class="form-label">Category</label>
+                        <select id="prompt-category" name="category" class="form-input">
+                            <option value="Book Review">Book Review</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="prompt-provider" class="form-label">Provider</label>
+                        <select id="prompt-provider" name="provider" class="form-input">
+                            <option value="openai">OpenAI</option>
+                            <option value="groq">Groq</option>
+                            <option value="mistral">Mistral</option>
+                            <option value="claude">Claude</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div class="form-group">

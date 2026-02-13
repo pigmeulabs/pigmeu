@@ -1,4 +1,4 @@
-"""LLM client with provider routing (OpenAI/Groq/Mistral)."""
+"""LLM client with provider routing (Groq/Mistral)."""
 
 from __future__ import annotations
 
@@ -8,6 +8,14 @@ from typing import Optional
 from openai import AsyncOpenAI
 
 from src.config import settings
+from src.workers.ai_defaults import (
+    DEFAULT_MODEL_ID,
+    DEFAULT_PROVIDER,
+    PROVIDER_GROQ,
+    PROVIDER_MISTRAL,
+    infer_provider_from_model,
+    normalize_provider,
+)
 
 
 class LLMClient:
@@ -15,13 +23,12 @@ class LLMClient:
 
     def __init__(self):
         self._clients = {
-            "openai": AsyncOpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None,
-            "groq": (
+            PROVIDER_GROQ: (
                 AsyncOpenAI(api_key=settings.groq_api_key, base_url="https://api.groq.com/openai/v1")
                 if settings.groq_api_key
                 else None
             ),
-            "mistral": (
+            PROVIDER_MISTRAL: (
                 AsyncOpenAI(api_key=settings.mistral_api_key, base_url="https://api.mistral.ai/v1")
                 if settings.mistral_api_key
                 else None
@@ -29,38 +36,39 @@ class LLMClient:
         }
 
     @staticmethod
+    def _normalize_provider(provider: Optional[str]) -> Optional[str]:
+        return normalize_provider(provider)
+
+    @staticmethod
     def _provider_base_url(provider: str) -> Optional[str]:
-        if provider == "groq":
+        normalized = LLMClient._normalize_provider(provider) or ""
+        if normalized == PROVIDER_GROQ:
             return "https://api.groq.com/openai/v1"
-        if provider == "mistral":
+        if normalized == PROVIDER_MISTRAL:
             return "https://api.mistral.ai/v1"
         return None
 
     @classmethod
     def _build_client(cls, provider: str, api_key: str) -> AsyncOpenAI:
+        normalized = cls._normalize_provider(provider) or DEFAULT_PROVIDER
         kwargs = {"api_key": api_key}
-        base_url = cls._provider_base_url(provider)
+        base_url = cls._provider_base_url(normalized)
         if base_url:
             kwargs["base_url"] = base_url
         return AsyncOpenAI(**kwargs)
 
     @staticmethod
     def _select_provider(model_id: str, provider: Optional[str]) -> str:
-        if provider:
-            return provider
-
-        model = (model_id or "").lower()
-        if "mistral" in model or "mixtral" in model:
-            return "mistral"
-        if "llama" in model or "groq" in model:
-            return "groq"
-        return "openai"
+        normalized = LLMClient._normalize_provider(provider)
+        if normalized:
+            return normalized
+        return infer_provider_from_model(model_id=model_id, fallback=DEFAULT_PROVIDER)
 
     async def generate(
         self,
         system_prompt: str,
         user_prompt: str,
-        model_id: str = "gpt-4o-mini",
+        model_id: str = DEFAULT_MODEL_ID,
         temperature: float = 0.7,
         max_tokens: int = 1000,
         provider: Optional[str] = None,
@@ -71,9 +79,14 @@ class LLMClient:
         selected_provider = self._select_provider(model_id=model_id, provider=provider)
         client = self._build_client(selected_provider, api_key) if api_key else self._clients.get(selected_provider)
 
-        # fallback order if selected provider is not configured
+        # Fallback between supported providers only (no OpenAI automatic fallback).
         if client is None and allow_fallback:
-            for fallback in ("openai", "groq", "mistral"):
+            fallback_order = (
+                [PROVIDER_MISTRAL, PROVIDER_GROQ]
+                if selected_provider == PROVIDER_MISTRAL
+                else [PROVIDER_GROQ, PROVIDER_MISTRAL]
+            )
+            for fallback in fallback_order:
                 if self._clients.get(fallback) is not None:
                     client = self._clients[fallback]
                     break

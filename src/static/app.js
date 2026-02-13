@@ -20,10 +20,26 @@ const promptForm = document.getElementById('prompt-form');
 const promptResult = document.getElementById('prompt-result');
 const promptFormResult = document.getElementById('prompt-form-result');
 const promptList = document.getElementById('prompt-list');
+const promptCategoryInput = document.getElementById('prompt-category');
+const promptProviderInput = document.getElementById('prompt-provider');
+const promptFilterCategoryInput = document.getElementById('prompt-filter-category');
+const promptFilterProviderInput = document.getElementById('prompt-filter-provider');
+const promptFilterNameInput = document.getElementById('prompt-filter-name');
 const createPromptBtn = document.getElementById('create-prompt-btn');
 const promptModal = document.getElementById('prompt-modal');
 const promptModalTitle = document.getElementById('prompt-modal-title');
 const promptCancelBtn = document.getElementById('prompt-cancel-btn');
+
+const contentSchemaForm = document.getElementById('content-schema-form');
+const contentSchemaResult = document.getElementById('content-schema-result');
+const contentSchemaFormResult = document.getElementById('content-schema-form-result');
+const contentSchemaList = document.getElementById('content-schema-list');
+const createContentSchemaBtn = document.getElementById('create-content-schema-btn');
+const contentSchemaEditorPanel = document.getElementById('content-schema-editor-panel');
+const contentSchemaModalTitle = document.getElementById('content-schema-modal-title');
+const contentSchemaCancelBtn = document.getElementById('content-schema-cancel-btn');
+const tocItemsContainer = document.getElementById('toc-items-container');
+const addTocItemBtn = document.getElementById('add-toc-item-btn');
 
 const taskEditModal = document.getElementById('task-edit-modal');
 const taskEditForm = document.getElementById('task-edit-form');
@@ -53,6 +69,9 @@ const statusFilter = document.getElementById('filter-status');
 const runImmediatelyInput = document.getElementById('run_immediately');
 const scheduleInput = document.getElementById('schedule_execution');
 const otherLinksContainer = document.getElementById('other-links-container');
+const mainCategoryInput = document.getElementById('main_category');
+const mainCategoryCredentialInput = document.getElementById('main_category_credential');
+const contentSchemaInput = document.getElementById('content_schema_id');
 
 let skip = 0;
 const limit = 10;
@@ -61,11 +80,24 @@ let currentTaskDetails = null;
 let editingTaskId = null;
 let editingTaskBaseSubmission = null;
 let searchDebounceTimer = null;
+let promptSearchDebounceTimer = null;
 let editingCredentialId = null;
 let editingPromptId = null;
+let editingContentSchemaId = null;
 let currentPipelineId = null;
 let currentPipelineDetails = null;
+let cachedPromptOptions = [];
+let cachedPromptCategories = [];
+const WP_CREDENTIAL_STORAGE_KEY = 'pigmeu.bookReview.wordpressCredentialId';
+const DEFAULT_WORDPRESS_CREDENTIAL_URL = 'https://analisederequisitos.com.br';
 const SIDEBAR_STORAGE_KEY = 'pigmeu.sidebar.collapsed';
+const PROMPT_DEFAULT_CATEGORY = 'Book Review';
+const PROMPT_PROVIDER_OPTIONS = [
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'groq', label: 'Groq' },
+  { value: 'mistral', label: 'Mistral' },
+  { value: 'claude', label: 'Claude' },
+];
 
 function safeStringify(value, fallback = '[unserializable object]') {
   try {
@@ -125,6 +157,17 @@ function getActionIconSvg(action) {
         <path d="M5 3h12l4 4v14H5z"></path>
         <path d="M8 3v6h8V3"></path>
         <path d="M9 21v-6h6v6"></path>
+      </svg>
+    `,
+    view: `
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"></path>
+        <circle cx="12" cy="12" r="3"></circle>
+      </svg>
+    `,
+    generate: `
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M5 3v18l15-9-15-9z"></path>
       </svg>
     `,
   };
@@ -254,6 +297,15 @@ function showSection(sectionId) {
 
   if (sectionId === 'pipelines-section') {
     fetchPipelines();
+  }
+
+  if (sectionId === 'content-schemas-section') {
+    fetchContentSchemas();
+  }
+
+  if (sectionId === 'submit-section') {
+    initializeMainCategorySources();
+    initializeContentSchemaOptions();
   }
 }
 
@@ -437,6 +489,11 @@ function renderTaskCard(task) {
 
   const amazonUrl = task.amazon_url ? escapeHtml(task.amazon_url) : '-';
   const shortUrl = amazonUrl.length > 64 ? `${amazonUrl.slice(0, 64)}...` : amazonUrl;
+  const hasFinalArticle =
+    !!task.article_id ||
+    ['article_generated', 'ready_for_review', 'approved', 'published'].includes(
+      String(task.status || '').toLowerCase()
+    );
 
   card.innerHTML = `
     <h3>${escapeHtml(task.title || '-')}</h3>
@@ -446,6 +503,15 @@ function renderTaskCard(task) {
       <span class="task-status ${statusClass(task.status)}">${escapeHtml(statusLabel(task.status))}</span>
       <div class="task-card-meta-actions">
         <span class="text-muted small">${formatDate(task.updated_at)}</span>
+        <button
+          type="button"
+          class="btn btn-secondary btn-xs btn-icon-only task-card-view-article-btn"
+          aria-label="View final article"
+          title="View final article"
+          ${hasFinalArticle ? '' : 'disabled'}
+        >
+          ${renderIconActionContent('view', 'View final article')}
+        </button>
         <button
           type="button"
           class="btn btn-danger btn-xs btn-icon-only task-card-delete-btn"
@@ -459,6 +525,14 @@ function renderTaskCard(task) {
   `;
 
   const deleteBtn = card.querySelector('.task-card-delete-btn');
+  const viewArticleBtn = card.querySelector('.task-card-view-article-btn');
+
+  const openDetails = (focusArticle = false) => {
+    currentTaskId = task.id;
+    showSection('task-details-section');
+    fetchTaskDetails(task.id, { focusArticle });
+  };
+
   if (deleteBtn) {
     deleteBtn.addEventListener('click', async (event) => {
       event.stopPropagation();
@@ -476,10 +550,15 @@ function renderTaskCard(task) {
     });
   }
 
+  if (viewArticleBtn) {
+    viewArticleBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      openDetails(true);
+    });
+  }
+
   card.addEventListener('click', () => {
-    currentTaskId = task.id;
-    showSection('task-details-section');
-    fetchTaskDetails(task.id);
+    openDetails(false);
   });
 
   return card;
@@ -692,7 +771,7 @@ function getStepContent(taskData, stage) {
   return null;
 }
 
-const TASK_FLOW_DEFINITION = [
+const DEFAULT_TASK_FLOW_DEFINITION = [
   { id: 'amazon_scrape', label: 'Amazon link scrap' },
   { id: 'additional_links_scrape', label: 'Additional links scrap' },
   { id: 'summarize_additional_links', label: 'Summarize additional links' },
@@ -703,7 +782,32 @@ const TASK_FLOW_DEFINITION = [
   { id: 'ready_for_review', label: 'Ready for review' },
 ];
 
-function mapCurrentTaskStep(submission = {}) {
+function humanizeStepId(stepId) {
+  return String(stepId || '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function resolveTaskFlowDefinition(taskData = null) {
+  const pipelineSteps = Array.isArray(taskData?.pipeline?.steps) ? taskData.pipeline.steps : [];
+  if (!pipelineSteps.length) return DEFAULT_TASK_FLOW_DEFINITION;
+
+  const normalized = pipelineSteps
+    .map((step) => {
+      const id = String(step?.id || '').trim();
+      if (!id) return null;
+      const label = String(step?.name || '').trim() || humanizeStepId(id);
+      return { id, label };
+    })
+    .filter(Boolean);
+
+  return normalized.length ? normalized : DEFAULT_TASK_FLOW_DEFINITION;
+}
+
+function mapCurrentTaskStep(submission = {}, flowDefinition = DEFAULT_TASK_FLOW_DEFINITION) {
+  const flowIds = new Set(flowDefinition.map((step) => String(step.id || '').toLowerCase()));
   const map = {
     amazon_scrape: 'amazon_scrape',
     scraping_amazon: 'amazon_scrape',
@@ -728,12 +832,29 @@ function mapCurrentTaskStep(submission = {}) {
   const candidates = [submission.current_step, submission.status];
   for (const candidate of candidates) {
     const raw = String(candidate || '').toLowerCase();
-    if (map[raw]) return map[raw];
+    if (!raw) continue;
+
+    const mapped = String(map[raw] || raw).toLowerCase();
+    if (flowIds.has(mapped)) return mapped;
+
+    if (raw.includes('context')) {
+      const byContext = flowDefinition.find((step) => String(step.id || '').toLowerCase().includes('context'));
+      if (byContext) return byContext.id;
+    }
+    if (raw.includes('article') || raw.includes('review')) {
+      const byArticle = flowDefinition.find((step) => String(step.id || '').toLowerCase().includes('article'));
+      if (byArticle) return byArticle.id;
+    }
+    if (raw.includes('scrap')) {
+      const byScrape = flowDefinition.find((step) => String(step.id || '').toLowerCase().includes('scrap'));
+      if (byScrape) return byScrape.id;
+    }
   }
   return null;
 }
 
 function buildTaskFlowSteps(taskData) {
+  const flowDefinition = resolveTaskFlowDefinition(taskData);
   const submission = taskData?.submission || {};
   const extracted = taskData?.book?.extracted || {};
   const status = String(submission.status || '').toLowerCase();
@@ -754,32 +875,32 @@ function buildTaskFlowSteps(taskData) {
   const isReady = ['ready_for_review', 'approved', 'published'].includes(status);
 
   const states = {};
-  TASK_FLOW_DEFINITION.forEach((step) => {
+  flowDefinition.forEach((step) => {
     states[step.id] = 'to_do';
   });
 
-  if (hasAmazonData) states.amazon_scrape = 'processed';
-  if (hasLinksStep) states.additional_links_scrape = 'processed';
-  if (hasSummaryStep) states.summarize_additional_links = 'processed';
-  if (hasConsolidated) states.consolidate_book_data = 'processed';
-  if (hasResearch) states.internet_research = 'processed';
-  if (hasContext) states.context_generation = 'processed';
-  if (hasArticle) states.article_generation = 'processed';
-  if (isReady) states.ready_for_review = 'processed';
+  if (hasAmazonData && states.amazon_scrape !== undefined) states.amazon_scrape = 'processed';
+  if (hasLinksStep && states.additional_links_scrape !== undefined) states.additional_links_scrape = 'processed';
+  if (hasSummaryStep && states.summarize_additional_links !== undefined) states.summarize_additional_links = 'processed';
+  if (hasConsolidated && states.consolidate_book_data !== undefined) states.consolidate_book_data = 'processed';
+  if (hasResearch && states.internet_research !== undefined) states.internet_research = 'processed';
+  if (hasContext && states.context_generation !== undefined) states.context_generation = 'processed';
+  if (hasArticle && states.article_generation !== undefined) states.article_generation = 'processed';
+  if (isReady && states.ready_for_review !== undefined) states.ready_for_review = 'processed';
 
-  const currentStep = mapCurrentTaskStep(submission);
-  const currentIndex = TASK_FLOW_DEFINITION.findIndex((step) => step.id === currentStep);
+  const currentStep = mapCurrentTaskStep(submission, flowDefinition);
+  const currentIndex = flowDefinition.findIndex((step) => step.id === currentStep);
   const isFailed = ['scraping_failed', 'failed'].includes(status);
 
   if (currentIndex >= 0) {
     for (let i = 0; i < currentIndex; i += 1) {
-      const prevId = TASK_FLOW_DEFINITION[i].id;
+      const prevId = flowDefinition[i].id;
       if (states[prevId] === 'to_do') states[prevId] = 'processed';
     }
 
     // If the pipeline is executing/retrying from a given step, all next steps must return to To Do.
-    for (let i = currentIndex + 1; i < TASK_FLOW_DEFINITION.length; i += 1) {
-      states[TASK_FLOW_DEFINITION[i].id] = 'to_do';
+    for (let i = currentIndex + 1; i < flowDefinition.length; i += 1) {
+      states[flowDefinition[i].id] = 'to_do';
     }
   }
 
@@ -789,7 +910,7 @@ function buildTaskFlowSteps(taskData) {
     states[currentStep] = 'current';
   }
 
-  return TASK_FLOW_DEFINITION.map((step) => ({
+  return flowDefinition.map((step) => ({
     ...step,
     state: states[step.id] || 'to_do',
   }));
@@ -868,7 +989,7 @@ function renderStepDetails(flowSteps = [], taskData = null) {
 
 function buildFlowStepsAfterRetry(taskData, retryStage) {
   const flowSteps = buildTaskFlowSteps(taskData).map((step) => ({ ...step }));
-  const retryIndex = TASK_FLOW_DEFINITION.findIndex((step) => step.id === retryStage);
+  const retryIndex = flowSteps.findIndex((step) => step.id === retryStage);
   if (retryIndex < 0) return flowSteps;
 
   flowSteps.forEach((step, idx) => {
@@ -882,8 +1003,61 @@ function buildFlowStepsAfterRetry(taskData, retryStage) {
   return flowSteps;
 }
 
+function getFinalArticleContent(taskData) {
+  const article = taskData?.article || {};
+  const draft = taskData?.draft || {};
+  const content = String(article.content || draft.content || '').trim();
+  if (!content) return null;
+
+  return {
+    title: String(article.title || taskData?.submission?.title || 'Generated Article'),
+    content,
+  };
+}
+
+function canGenerateArticleManually(taskData) {
+  const submission = taskData?.submission || {};
+  const status = String(submission.status || '').toLowerCase();
+  const blockedStatuses = ['pending_article', 'article_generation'];
+  if (blockedStatuses.includes(status)) return false;
+
+  const article = taskData?.article || {};
+  const draft = taskData?.draft || {};
+  const hasArticle =
+    !!taskData?.article?.id ||
+    !!String(article.content || '').trim() ||
+    !!String(draft.content || '').trim();
+  if (hasArticle) return false;
+
+  const hasContext = !!String(taskData?.knowledge_base?.markdown_content || '').trim();
+  return hasContext;
+}
+
+function renderFinalArticleInViewer(taskData) {
+  const viewer = document.getElementById('step-content-viewer');
+  if (!viewer) return false;
+
+  viewer.style.display = 'block';
+  const articleContent = getFinalArticleContent(taskData);
+  if (!articleContent) {
+    viewer.innerHTML = `
+      <h5>Final Article</h5>
+      <p class="text-muted">Final article content is not available yet.</p>
+    `;
+    return false;
+  }
+
+  viewer.innerHTML = `
+    <h5>Final Article: ${escapeHtml(articleContent.title)}</h5>
+    <div class="article-preview">${markdownToHtml(articleContent.content)}</div>
+  `;
+  return true;
+}
+
 function renderTaskDetails(data, flowStepsOverride = null) {
   const submission = data.submission || {};
+  const pipeline = data.pipeline || null;
+  const allowManualGenerateArticle = canGenerateArticleManually(data);
   const flowSteps =
     Array.isArray(flowStepsOverride) && flowStepsOverride.length > 0
       ? flowStepsOverride
@@ -892,8 +1066,20 @@ function renderTaskDetails(data, flowStepsOverride = null) {
   return `
     <div class="task-details-container">
       <div class="task-details-top">
-        <h3 class="task-details-title">Task Details: Book Review</h3>
+        <h3 class="task-details-title">Task Details: ${escapeHtml(pipeline?.name || 'Book Review')}</h3>
         <div class="task-details-top-actions">
+          ${
+            allowManualGenerateArticle
+              ? `
+          <button id="action-generate-article" class="btn btn-primary btn-icon-only" type="button" aria-label="Generate article" title="Generate article">
+            ${renderIconActionContent('generate', 'Generate article')}
+          </button>
+          `
+              : ''
+          }
+          <button id="action-view-final-article" class="btn btn-secondary btn-icon-only" type="button" aria-label="View final article" title="View final article">
+            ${renderIconActionContent('view', 'View final article')}
+          </button>
           <button id="action-edit-task" class="btn btn-primary btn-icon-only" type="button" aria-label="Edit task" title="Edit task">
             ${renderIconActionContent('edit', 'Edit task')}
           </button>
@@ -961,11 +1147,37 @@ async function deleteTaskById(taskId, { closeDetails = false } = {}) {
 }
 
 function wireTaskActions(taskId, taskData) {
+  const generateArticleBtn = document.getElementById('action-generate-article');
+  const viewFinalArticleBtn = document.getElementById('action-view-final-article');
   const editTaskBtn = document.getElementById('action-edit-task');
   const deleteTaskBtn = document.getElementById('action-delete-task');
   const stepContentViewer = document.getElementById('step-content-viewer');
   const reprocessButtons = document.querySelectorAll('.step-action-reprocess');
   const viewButtons = document.querySelectorAll('.step-action-view');
+
+  if (generateArticleBtn) {
+    generateArticleBtn.addEventListener('click', async () => {
+      try {
+        generateArticleBtn.disabled = true;
+        await executeTaskAction(`/tasks/${taskId}/generate_article`, 'POST');
+        showTaskActionResult('Article generation queued successfully.');
+        setTimeout(() => fetchTaskDetails(taskId), 1000);
+      } catch (err) {
+        showTaskActionResult(normalizeError(err, 'Failed to queue article generation'), true);
+      } finally {
+        generateArticleBtn.disabled = false;
+      }
+    });
+  }
+
+  if (viewFinalArticleBtn) {
+    viewFinalArticleBtn.addEventListener('click', () => {
+      const displayed = renderFinalArticleInViewer(taskData);
+      if (!displayed) {
+        showTaskActionResult('Final article content is not available yet.', true);
+      }
+    });
+  }
 
   if (editTaskBtn) {
     editTaskBtn.addEventListener('click', () => {
@@ -1106,7 +1318,8 @@ function wireTaskActions(taskId, taskData) {
   }
 }
 
-async function fetchTaskDetails(taskId) {
+async function fetchTaskDetails(taskId, options = {}) {
+  const focusArticle = !!options.focusArticle;
   setTaskDetailsContent('<div class="loading">Loading details...</div>');
 
   try {
@@ -1117,8 +1330,16 @@ async function fetchTaskDetails(taskId) {
     currentTaskDetails = data;
     setTaskDetailsContent(renderTaskDetails(data));
     wireTaskActions(taskId, data);
+    if (focusArticle) {
+      const displayed = renderFinalArticleInViewer(data);
+      if (!displayed) {
+        showTaskActionResult('Final article content is not available yet.', true);
+      }
+    }
+    return data;
   } catch (err) {
     setTaskDetailsContent(`<div class="form-result error">Error: ${escapeHtml(normalizeError(err, 'Failed to load details'))}</div>`);
+    return null;
   }
 }
 
@@ -1155,6 +1376,239 @@ function clearSubmitEditMode() {
   setSubmitFormMode(false);
 }
 
+function readStoredWordpressCredentialId() {
+  try {
+    return localStorage.getItem(WP_CREDENTIAL_STORAGE_KEY) || '';
+  } catch (_) {
+    return '';
+  }
+}
+
+function storeWordpressCredentialId(credentialId) {
+  try {
+    if (credentialId) {
+      localStorage.setItem(WP_CREDENTIAL_STORAGE_KEY, String(credentialId));
+    } else {
+      localStorage.removeItem(WP_CREDENTIAL_STORAGE_KEY);
+    }
+  } catch (_) {
+    // no-op
+  }
+}
+
+function applyMainCategorySelection(value) {
+  if (!mainCategoryInput) return;
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    mainCategoryInput.value = '';
+    mainCategoryInput.dataset.pendingValue = '';
+    return;
+  }
+
+  const existing = Array.from(mainCategoryInput.options).find((opt) => opt.value === normalized);
+  if (!existing) {
+    const option = document.createElement('option');
+    option.value = normalized;
+    option.textContent = normalized;
+    option.dataset.dynamic = 'true';
+    mainCategoryInput.appendChild(option);
+  }
+
+  mainCategoryInput.value = normalized;
+  mainCategoryInput.dataset.pendingValue = normalized;
+}
+
+function populateWordpressCredentialOptions(items = []) {
+  if (!mainCategoryCredentialInput) return '';
+
+  const credentials = Array.isArray(items) ? items : [];
+  mainCategoryCredentialInput.innerHTML = '';
+
+  if (credentials.length === 0) {
+    mainCategoryCredentialInput.innerHTML = '<option value="">No active WordPress credential</option>';
+    mainCategoryCredentialInput.disabled = true;
+    return '';
+  }
+
+  mainCategoryCredentialInput.disabled = false;
+  const storedId = readStoredWordpressCredentialId();
+  const normalizedDefaultUrl = DEFAULT_WORDPRESS_CREDENTIAL_URL.replace(/\/$/, '').toLowerCase();
+  const byStored = credentials.find((item) => String(item.id) === String(storedId));
+  const byDefaultUrl = credentials.find((item) => {
+    const url = String(item.url || '').replace(/\/$/, '').toLowerCase();
+    return url && url === normalizedDefaultUrl;
+  });
+  const selected = byStored || byDefaultUrl || credentials[0];
+
+  credentials.forEach((item) => {
+    const option = document.createElement('option');
+    option.value = String(item.id || '');
+    option.textContent = item.url
+      ? `${item.name || 'WordPress'} (${item.url})`
+      : `${item.name || 'WordPress'} (${item.service || 'wordpress'})`;
+    option.selected = String(item.id) === String(selected?.id || '');
+    mainCategoryCredentialInput.appendChild(option);
+  });
+
+  return String(selected?.id || '');
+}
+
+function setMainCategoryLoading(message = 'Loading categories...') {
+  if (!mainCategoryInput) return;
+  const pendingValue = mainCategoryInput.dataset.pendingValue || '';
+  mainCategoryInput.innerHTML = `<option value="">${escapeHtml(message)}</option>`;
+  mainCategoryInput.disabled = true;
+  if (pendingValue) applyMainCategorySelection(pendingValue);
+}
+
+function populateMainCategoryOptions(categories = []) {
+  if (!mainCategoryInput) return;
+
+  const pendingValue = mainCategoryInput.dataset.pendingValue || '';
+  const items = Array.isArray(categories) ? categories : [];
+  mainCategoryInput.innerHTML = '<option value="">Select category</option>';
+
+  items.forEach((item) => {
+    const name = String(item?.name || '').trim();
+    if (!name) return;
+    const option = document.createElement('option');
+    option.value = name;
+    option.textContent = name;
+    mainCategoryInput.appendChild(option);
+  });
+
+  mainCategoryInput.disabled = false;
+  if (pendingValue) {
+    applyMainCategorySelection(pendingValue);
+  }
+}
+
+async function fetchMainCategoriesByCredential(credentialId) {
+  if (!credentialId) {
+    setMainCategoryLoading('Select credential first');
+    return;
+  }
+
+  setMainCategoryLoading();
+
+  const params = new URLSearchParams({ credential_id: String(credentialId) });
+  const response = await fetch(`/settings/wordpress/categories?${params.toString()}`);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(parseApiError(data, 'Failed to load WordPress categories'));
+  }
+
+  const categories = Array.isArray(data.categories) ? data.categories : [];
+  populateMainCategoryOptions(categories);
+}
+
+async function initializeMainCategorySources() {
+  if (!mainCategoryCredentialInput || !mainCategoryInput) return;
+
+  try {
+    const response = await fetch('/settings/credentials?service=wordpress&active=true');
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(parseApiError(data, 'Failed to load WordPress credentials'));
+
+    const selectedCredentialId = populateWordpressCredentialOptions(data);
+    if (!selectedCredentialId) {
+      setMainCategoryLoading('No category available');
+      return;
+    }
+
+    mainCategoryCredentialInput.value = selectedCredentialId;
+    storeWordpressCredentialId(selectedCredentialId);
+    await fetchMainCategoriesByCredential(selectedCredentialId);
+  } catch (err) {
+    if (mainCategoryCredentialInput) {
+      mainCategoryCredentialInput.innerHTML = '<option value="">Error loading credentials</option>';
+      mainCategoryCredentialInput.disabled = true;
+    }
+    setMainCategoryLoading(normalizeError(err, 'Error loading categories'));
+  }
+}
+
+function applyContentSchemaSelection(value) {
+  if (!contentSchemaInput) return;
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    contentSchemaInput.value = '';
+    contentSchemaInput.dataset.pendingValue = '';
+    return;
+  }
+
+  const existing = Array.from(contentSchemaInput.options).find((opt) => opt.value === normalized);
+  if (!existing) {
+    const option = document.createElement('option');
+    option.value = normalized;
+    option.textContent = normalized;
+    option.dataset.dynamic = 'true';
+    contentSchemaInput.appendChild(option);
+  }
+
+  contentSchemaInput.value = normalized;
+  contentSchemaInput.dataset.pendingValue = normalized;
+}
+
+function setContentSchemaLoading(message = 'Loading schemas...') {
+  if (!contentSchemaInput) return;
+  const pendingValue = contentSchemaInput.dataset.pendingValue || '';
+  contentSchemaInput.innerHTML = `<option value="">${escapeHtml(message)}</option>`;
+  contentSchemaInput.disabled = true;
+  if (pendingValue) applyContentSchemaSelection(pendingValue);
+}
+
+function populateContentSchemaOptions(items = []) {
+  if (!contentSchemaInput) return '';
+
+  const schemas = Array.isArray(items) ? items : [];
+  const pendingValue = contentSchemaInput.dataset.pendingValue || '';
+  contentSchemaInput.innerHTML = '<option value="">Select content schema</option>';
+
+  schemas.forEach((schema) => {
+    const id = String(schema?.id || '').trim();
+    if (!id) return;
+    const option = document.createElement('option');
+    option.value = id;
+    option.textContent = schema?.name ? String(schema.name) : id;
+    contentSchemaInput.appendChild(option);
+  });
+
+  if (schemas.length === 0) {
+    contentSchemaInput.innerHTML = '<option value="">No active content schema</option>';
+    contentSchemaInput.disabled = true;
+    contentSchemaInput.dataset.pendingValue = '';
+    return '';
+  }
+
+  const selectedId = pendingValue && schemas.some((item) => String(item?.id) === pendingValue)
+    ? pendingValue
+    : String(schemas[0]?.id || '');
+  contentSchemaInput.value = selectedId;
+  contentSchemaInput.dataset.pendingValue = selectedId;
+  contentSchemaInput.disabled = false;
+  return selectedId;
+}
+
+async function initializeContentSchemaOptions() {
+  if (!contentSchemaInput) return;
+
+  setContentSchemaLoading();
+  try {
+    const params = new URLSearchParams({
+      active: 'true',
+      target_type: 'book_review',
+    });
+    const response = await fetch(`/settings/content-schemas?${params.toString()}`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(parseApiError(data, 'Failed to load content schemas'));
+
+    populateContentSchemaOptions(Array.isArray(data) ? data : []);
+  } catch (err) {
+    setContentSchemaLoading(normalizeError(err, 'Error loading content schemas'));
+  }
+}
+
 function readSubmitOtherLinks() {
   if (!otherLinksContainer) return [];
   return Array.from(otherLinksContainer.querySelectorAll('.other-link'))
@@ -1167,7 +1621,6 @@ function fillSubmitFormFromSubmission(submission = {}) {
   const authorInput = document.getElementById('author_name');
   const amazonInput = document.getElementById('amazon_url');
   const textualInfoInput = document.getElementById('textual_information');
-  const mainCategoryInput = document.getElementById('main_category');
   const articleStatusInput = document.getElementById('article_status');
   const userApprovalInput = document.getElementById('user_approval_required');
 
@@ -1175,7 +1628,8 @@ function fillSubmitFormFromSubmission(submission = {}) {
   if (authorInput) authorInput.value = submission.author_name || '';
   if (amazonInput) amazonInput.value = submission.amazon_url || '';
   if (textualInfoInput) textualInfoInput.value = submission.textual_information || '';
-  if (mainCategoryInput) mainCategoryInput.value = submission.main_category || '';
+  applyMainCategorySelection(submission.main_category || '');
+  applyContentSchemaSelection(submission.content_schema_id || '');
   if (articleStatusInput) articleStatusInput.value = submission.article_status || '';
   if (runImmediatelyInput) runImmediatelyInput.checked = submission.run_immediately !== false;
   if (scheduleInput) scheduleInput.value = toDatetimeLocalValue(submission.schedule_execution);
@@ -1201,6 +1655,8 @@ function openTaskEditOnSubmitForm(taskId, submission = {}) {
   editingTaskId = taskId;
   editingTaskBaseSubmission = { ...submission };
   setSubmitFormMode(true);
+  initializeMainCategorySources();
+  initializeContentSchemaOptions();
   fillSubmitFormFromSubmission(submission);
   showSection('submit-section');
 
@@ -1225,6 +1681,7 @@ function collectSubmitEditPayload(baseSubmission = {}) {
     run_immediately: payload.run_immediately,
     schedule_execution: payload.run_immediately ? null : toIsoDateTime(payload.schedule_execution),
     main_category: payload.main_category || null,
+    content_schema_id: payload.content_schema_id || null,
     article_status: payload.article_status || null,
     user_approval_required: payload.user_approval_required,
   };
@@ -1365,7 +1822,8 @@ function collectSubmitPayload() {
   const authorName = document.getElementById('author_name')?.value.trim();
   const amazonUrl = document.getElementById('amazon_url')?.value.trim();
   const textualInformation = document.getElementById('textual_information')?.value.trim();
-  const mainCategory = document.getElementById('main_category')?.value.trim();
+  const mainCategory = mainCategoryInput?.value.trim();
+  const contentSchemaId = contentSchemaInput?.value.trim();
   const articleStatus = document.getElementById('article_status')?.value;
   const runImmediately = !!runImmediatelyInput?.checked;
   const scheduleExecution = scheduleInput?.value;
@@ -1393,6 +1851,7 @@ function collectSubmitPayload() {
 
   if (textualInformation) payload.textual_information = textualInformation;
   if (mainCategory) payload.main_category = mainCategory;
+  if (contentSchemaId) payload.content_schema_id = contentSchemaId;
   if (articleStatus) payload.article_status = articleStatus;
   if (!runImmediately) payload.schedule_execution = scheduleExecution;
 
@@ -1446,6 +1905,8 @@ if (submitForm) {
       submitForm.reset();
       updateScheduleState();
       resetSubmitFormLinks();
+      initializeMainCategorySources();
+      initializeContentSchemaOptions();
       clearSubmitEditMode();
 
       if (targetTaskId && targetTaskId === currentTaskId) {
@@ -1535,12 +1996,14 @@ function openCredentialModal(credential = null) {
 
     const service = credForm.querySelector('#cred-service');
     const name = credForm.querySelector('#cred-name');
+    const url = credForm.querySelector('#cred-url');
     const key = credForm.querySelector('#cred-key');
     const username = credForm.querySelector('#cred-username');
     const activeInput = credForm.querySelector('input[name="active"]');
 
     if (service) service.value = credential.service || 'openai';
     if (name) name.value = credential.name || '';
+    if (url) url.value = credential.url || '';
     if (key) key.value = '';
     if (username) username.value = credential.username_email || '';
     if (activeInput) activeInput.checked = !!credential.active;
@@ -1567,7 +2030,8 @@ function renderCredentialItem(credential) {
   li.innerHTML = `
     <div>
       <strong>${escapeHtml(credential.name || credential.service || '-')}</strong>
-      <div class="text-muted small">Service: ${escapeHtml(credential.service || '-')} | Key: ${escapeHtml(credential.key || '****')}</div>
+      <div class="text-muted small">Service: ${escapeHtml(credential.service || '-')} | URL: ${escapeHtml(credential.url || '-')}</div>
+      <div class="text-muted small">Key: ${escapeHtml(credential.key || '****')}</div>
       <div class="text-muted small">Created: ${formatDate(credential.created_at)} | Last Used: ${lastUsed}</div>
       <span class="task-status ${active ? 'status-success' : 'status-warning'}">${status}</span>
     </div>
@@ -1623,6 +2087,7 @@ function renderCredentialItem(credential) {
         credResult.textContent = 'Credential updated successfully.';
       }
       fetchCredentials();
+      initializeMainCategorySources();
     } catch (err) {
       if (credResult) {
         credResult.className = 'form-result error';
@@ -1647,6 +2112,7 @@ function renderCredentialItem(credential) {
         credResult.textContent = 'Credential deleted successfully.';
       }
       fetchCredentials();
+      initializeMainCategorySources();
     } catch (err) {
       if (credResult) {
         credResult.className = 'form-result error';
@@ -1691,16 +2157,22 @@ if (credForm) {
 
     const service = credForm.querySelector('#cred-service')?.value;
     const name = credForm.querySelector('#cred-name')?.value.trim();
+    const url = credForm.querySelector('#cred-url')?.value.trim();
     const key = credForm.querySelector('#cred-key')?.value.trim();
     const usernameEmail = credForm.querySelector('#cred-username')?.value.trim();
     const encrypted = !!credForm.querySelector('input[name="encrypted"]')?.checked;
     const active = !!credForm.querySelector('input[name="active"]')?.checked;
 
     try {
+      if (service === 'wordpress' && !url) {
+        throw new Error('Base URL is required for WordPress credentials.');
+      }
+
       let response;
       if (editingCredentialId) {
         const payload = {
           name: name || undefined,
+          url: url || undefined,
           username_email: usernameEmail || undefined,
           active,
         };
@@ -1722,6 +2194,7 @@ if (credForm) {
           body: JSON.stringify({
             service,
             name,
+            url: url || undefined,
             key,
             username_email: usernameEmail || undefined,
             encrypted,
@@ -1740,6 +2213,7 @@ if (credForm) {
       resetCredentialForm();
       closeCredentialModal();
       fetchCredentials();
+      initializeMainCategorySources();
     } catch (err) {
       if (credFormResult) {
         credFormResult.className = 'form-result error';
@@ -1755,6 +2229,99 @@ function setPromptFormMode(editing) {
   if (submitButton) setIconButtonContent(submitButton, 'save', editing ? 'Save prompt changes' : 'Save prompt');
 }
 
+function getPromptProviderLabel(provider) {
+  const normalized = String(provider || '').trim().toLowerCase();
+  const found = PROMPT_PROVIDER_OPTIONS.find((item) => item.value === normalized);
+  if (found) return found.label;
+  return normalized ? normalized.toUpperCase() : 'Unknown';
+}
+
+function applyPromptCategoryOptions(categories = []) {
+  const normalized = Array.from(
+    new Set(
+      [PROMPT_DEFAULT_CATEGORY, ...(Array.isArray(categories) ? categories : [])]
+        .map((item) => String(item || '').trim())
+        .filter((item) => item)
+    )
+  ).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+
+  cachedPromptCategories = normalized;
+
+  if (promptCategoryInput) {
+    const selected = String(promptCategoryInput.value || '').trim();
+    promptCategoryInput.innerHTML = normalized
+      .map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`)
+      .join('');
+    const fallback = normalized.includes(PROMPT_DEFAULT_CATEGORY) ? PROMPT_DEFAULT_CATEGORY : (normalized[0] || '');
+    promptCategoryInput.value = normalized.includes(selected) ? selected : fallback;
+  }
+
+  if (promptFilterCategoryInput) {
+    const selected = String(promptFilterCategoryInput.value || '').trim();
+    promptFilterCategoryInput.innerHTML = `<option value="">All categories</option>${normalized
+      .map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`)
+      .join('')}`;
+    promptFilterCategoryInput.value = normalized.includes(selected) ? selected : '';
+  }
+}
+
+function applyPromptProviderOptions(items = []) {
+  const values = new Set(PROMPT_PROVIDER_OPTIONS.map((item) => item.value));
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const provider = String(item?.provider || '').trim().toLowerCase();
+    if (provider) values.add(provider);
+  });
+
+  const providerOptions = Array.from(values)
+    .sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' }))
+    .map((value) => ({ value, label: getPromptProviderLabel(value) }));
+
+  if (promptProviderInput) {
+    const selected = String(promptProviderInput.value || '').trim().toLowerCase() || 'openai';
+    promptProviderInput.innerHTML = providerOptions
+      .map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`)
+      .join('');
+    promptProviderInput.value = values.has(selected) ? selected : 'openai';
+  }
+
+  if (promptFilterProviderInput) {
+    const selected = String(promptFilterProviderInput.value || '').trim().toLowerCase();
+    promptFilterProviderInput.innerHTML = `<option value="">All providers</option>${providerOptions
+      .map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`)
+      .join('')}`;
+    promptFilterProviderInput.value = values.has(selected) ? selected : '';
+  }
+}
+
+async function fetchPromptCategories(force = false) {
+  if (!force && cachedPromptCategories.length > 0) return cachedPromptCategories;
+
+  const response = await fetch('/settings/prompt-categories');
+  const data = await response.json().catch(() => ([]));
+  if (!response.ok) throw new Error(parseApiError(data, 'Failed to load prompt categories'));
+  if (!Array.isArray(data)) {
+    cachedPromptCategories = [PROMPT_DEFAULT_CATEGORY];
+    return cachedPromptCategories;
+  }
+
+  cachedPromptCategories = data
+    .map((item) => String(item || '').trim())
+    .filter((item) => item);
+  if (!cachedPromptCategories.includes(PROMPT_DEFAULT_CATEGORY)) {
+    cachedPromptCategories.unshift(PROMPT_DEFAULT_CATEGORY);
+  }
+  return cachedPromptCategories;
+}
+
+async function initializePromptCategories(force = false) {
+  try {
+    const categories = await fetchPromptCategories(force);
+    applyPromptCategoryOptions(categories);
+  } catch (_) {
+    applyPromptCategoryOptions([PROMPT_DEFAULT_CATEGORY]);
+  }
+}
+
 function resetPromptForm() {
   editingPromptId = null;
   if (!promptForm) return;
@@ -1768,12 +2335,31 @@ function resetPromptForm() {
   if (model) model.value = 'gpt-4o-mini';
   if (temperature) temperature.value = '0.7';
   if (maxTokens) maxTokens.value = '800';
+  if (promptCategoryInput) promptCategoryInput.value = PROMPT_DEFAULT_CATEGORY;
+  if (promptProviderInput) promptProviderInput.value = 'openai';
   if (promptFormResult) {
     promptFormResult.className = 'form-result';
     promptFormResult.textContent = '';
   }
 
   setPromptFormMode(false);
+}
+
+function getPromptFilters() {
+  return {
+    category: String(promptFilterCategoryInput?.value || '').trim(),
+    provider: String(promptFilterProviderInput?.value || '').trim().toLowerCase(),
+    name: String(promptFilterNameInput?.value || '').trim(),
+  };
+}
+
+function buildPromptFilterParams() {
+  const filters = getPromptFilters();
+  const params = new URLSearchParams();
+  if (filters.category) params.set('category', filters.category);
+  if (filters.provider) params.set('provider', filters.provider);
+  if (filters.name) params.set('name', filters.name);
+  return params.toString();
 }
 
 function openPromptModal(prompt = null) {
@@ -1783,6 +2369,18 @@ function openPromptModal(prompt = null) {
 
     promptForm.querySelector('#prompt-name').value = prompt.name || '';
     promptForm.querySelector('#prompt-purpose').value = prompt.purpose || '';
+    if (promptCategoryInput) promptCategoryInput.value = prompt.category || PROMPT_DEFAULT_CATEGORY;
+    if (promptProviderInput) {
+      const providerValue = String(prompt.provider || 'openai').toLowerCase();
+      const hasOption = Array.from(promptProviderInput.options).some((option) => option.value === providerValue);
+      if (!hasOption && providerValue) {
+        const option = document.createElement('option');
+        option.value = providerValue;
+        option.textContent = getPromptProviderLabel(providerValue);
+        promptProviderInput.appendChild(option);
+      }
+      promptProviderInput.value = providerValue;
+    }
     promptForm.querySelector('#prompt-short').value = prompt.short_description || '';
     promptForm.querySelector('#prompt-system').value = prompt.system_prompt || '';
     promptForm.querySelector('#prompt-user').value = prompt.user_prompt || '';
@@ -1814,6 +2412,7 @@ function renderPromptItem(prompt) {
     <div>
       <strong>${escapeHtml(prompt.name || '-')}</strong>
       <div class="text-muted small">${escapeHtml(prompt.short_description || prompt.purpose || '')}</div>
+      <div class="text-muted small">Category: ${escapeHtml(prompt.category || PROMPT_DEFAULT_CATEGORY)} | Provider: ${escapeHtml(getPromptProviderLabel(prompt.provider || 'openai'))}</div>
       <div class="text-muted small">Purpose: ${escapeHtml(prompt.purpose || '-')} | Model: ${escapeHtml(prompt.model_id || '-')}</div>
       <div class="text-muted small">${escapeHtml(shortSystem)}${(prompt.system_prompt || '').length > 160 ? '...' : ''}</div>
       <span class="task-status ${active ? 'status-success' : 'status-warning'}">${active ? 'Active' : 'Inactive'}</span>
@@ -1910,9 +2509,12 @@ async function fetchPrompts() {
   promptList.innerHTML = '<li class="loading">Loading...</li>';
 
   try {
-    const response = await fetch('/settings/prompts');
+    const query = buildPromptFilterParams();
+    const response = await fetch(`/settings/prompts${query ? `?${query}` : ''}`);
     const items = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(parseApiError(items, 'Failed to load prompts'));
+
+    applyPromptProviderOptions(Array.isArray(items) ? items : []);
 
     promptList.innerHTML = '';
     if (!Array.isArray(items) || items.length === 0) {
@@ -1938,6 +2540,8 @@ if (promptForm) {
     const payload = {
       name: promptForm.querySelector('#prompt-name')?.value.trim(),
       purpose: promptForm.querySelector('#prompt-purpose')?.value.trim(),
+      category: promptForm.querySelector('#prompt-category')?.value.trim() || PROMPT_DEFAULT_CATEGORY,
+      provider: promptForm.querySelector('#prompt-provider')?.value.trim().toLowerCase() || 'openai',
       short_description: promptForm.querySelector('#prompt-short')?.value.trim() || undefined,
       system_prompt: promptForm.querySelector('#prompt-system')?.value,
       user_prompt: promptForm.querySelector('#prompt-user')?.value,
@@ -1949,8 +2553,8 @@ if (promptForm) {
     };
 
     try {
-      if (!payload.name || !payload.purpose || !payload.system_prompt || !payload.user_prompt) {
-        throw new Error('Prompt name, purpose, system prompt, and user prompt are required.');
+      if (!payload.name || !payload.purpose || !payload.category || !payload.provider || !payload.system_prompt || !payload.user_prompt) {
+        throw new Error('Prompt name, purpose, category, provider, system prompt, and user prompt are required.');
       }
 
       const response = await fetch(editingPromptId ? `/settings/prompts/${editingPromptId}` : '/settings/prompts', {
@@ -1973,6 +2577,551 @@ if (promptForm) {
       if (promptFormResult) {
         promptFormResult.className = 'form-result error';
         promptFormResult.textContent = normalizeError(err, 'Failed to save prompt');
+      }
+    }
+  });
+}
+
+function parseOptionalNonNegativeInteger(value, fieldLabel) {
+  if (value === '' || value === null || value === undefined) return null;
+  const parsed = Number.parseInt(String(value), 10);
+  if (Number.isNaN(parsed) || parsed < 0) {
+    throw new Error(`${fieldLabel} must be a non-negative integer.`);
+  }
+  return parsed;
+}
+
+function parseRequiredNonNegativeInteger(value, fieldLabel) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  if (Number.isNaN(parsed) || parsed < 0) {
+    throw new Error(`${fieldLabel} must be a non-negative integer.`);
+  }
+  return parsed;
+}
+
+function parseCommaSeparatedValues(value) {
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item);
+}
+
+async function fetchPromptOptions(force = false) {
+  if (!force && cachedPromptOptions.length > 0) return cachedPromptOptions;
+
+  const response = await fetch('/settings/prompts');
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(parseApiError(data, 'Failed to load prompt options'));
+  if (!Array.isArray(data)) {
+    cachedPromptOptions = [];
+    return cachedPromptOptions;
+  }
+
+  cachedPromptOptions = data.map((item) => ({
+    id: String(item.id || ''),
+    name: String(item.name || ''),
+    purpose: String(item.purpose || ''),
+    category: String(item.category || PROMPT_DEFAULT_CATEGORY),
+    provider: String(item.provider || 'openai').toLowerCase(),
+    active: item.active !== false,
+  }));
+  return cachedPromptOptions;
+}
+
+function buildTocPromptOptions(selectedPromptId = '') {
+  const selectedId = String(selectedPromptId || '');
+  const options = cachedPromptOptions
+    .map((item) => {
+      const selected = selectedId && item.id === selectedId ? 'selected' : '';
+      const label = `${item.name || '-'}${item.purpose ? ` (${item.purpose})` : ''}${item.active ? '' : ' [inactive]'}`;
+      return `<option value="${escapeHtml(item.id)}" ${selected}>${escapeHtml(label)}</option>`;
+    })
+    .join('');
+
+  return `<option value="">No prompt</option>${options}`;
+}
+
+function updateTocSpecificHintState(row) {
+  if (!row) return;
+  const modeSelect = row.querySelector('.toc-content-mode');
+  const hintField = row.querySelector('.toc-specific-content-hint');
+  if (!(modeSelect instanceof HTMLSelectElement) || !(hintField instanceof HTMLTextAreaElement)) return;
+
+  const isSpecific = modeSelect.value === 'specific';
+  hintField.disabled = !isSpecific;
+  hintField.placeholder = isSpecific
+    ? 'Describe the specific content this section must include.'
+    : 'Optional guidance for dynamic generation.';
+}
+
+function createTocItemCard(item = {}) {
+  const level = String(item.level || 'h2').toLowerCase() === 'h3' ? 'h3' : 'h2';
+  const contentMode = String(item.content_mode || 'dynamic').toLowerCase() === 'specific' ? 'specific' : 'dynamic';
+  const titleTemplate = String(item.title_template || '');
+  const specificContentHint = String(item.specific_content_hint || '');
+  const minParagraphs = item.min_paragraphs ?? '';
+  const maxParagraphs = item.max_paragraphs ?? '';
+  const minWords = item.min_words ?? '';
+  const maxWords = item.max_words ?? '';
+  const sourceFields = Array.isArray(item.source_fields) ? item.source_fields.join(', ') : '';
+  const promptId = item.prompt_id ? String(item.prompt_id) : '';
+
+  const card = document.createElement('article');
+  card.className = 'toc-item-card';
+  card.innerHTML = `
+    <div class="toc-item-header">
+      <h5 class="toc-item-index">Item</h5>
+      <button type="button" class="btn btn-danger btn-xs btn-icon-only toc-remove-btn" aria-label="Remove TOC item" title="Remove TOC item">
+        ${renderIconActionContent('delete', 'Remove TOC item')}
+      </button>
+    </div>
+    <div class="toc-item-grid">
+      <div class="form-group">
+        <label class="form-label">Level</label>
+        <select class="form-input toc-level">
+          <option value="h2" ${level === 'h2' ? 'selected' : ''}>H2</option>
+          <option value="h3" ${level === 'h3' ? 'selected' : ''}>H3</option>
+        </select>
+      </div>
+      <div class="form-group toc-item-grid-span-2">
+        <label class="form-label">Title/Sub-title Template *</label>
+        <input type="text" class="form-input toc-title-template" value="${escapeHtml(titleTemplate)}" placeholder="Ex: Bibliographic Data">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Content Type</label>
+        <select class="form-input toc-content-mode">
+          <option value="dynamic" ${contentMode === 'dynamic' ? 'selected' : ''}>Dynamic</option>
+          <option value="specific" ${contentMode === 'specific' ? 'selected' : ''}>Specific Content</option>
+        </select>
+      </div>
+      <div class="form-group toc-item-grid-span-2">
+        <label class="form-label">Specific Content Hint</label>
+        <textarea class="form-textarea toc-specific-content-hint" rows="2">${escapeHtml(specificContentHint)}</textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Min Paragraphs</label>
+        <input type="number" min="0" step="1" class="form-input toc-min-paragraphs" value="${escapeHtml(minParagraphs)}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Max Paragraphs</label>
+        <input type="number" min="0" step="1" class="form-input toc-max-paragraphs" value="${escapeHtml(maxParagraphs)}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Min Words</label>
+        <input type="number" min="0" step="1" class="form-input toc-min-words" value="${escapeHtml(minWords)}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Max Words</label>
+        <input type="number" min="0" step="1" class="form-input toc-max-words" value="${escapeHtml(maxWords)}">
+      </div>
+      <div class="form-group toc-item-grid-span-2">
+        <label class="form-label">Database Fields (comma-separated)</label>
+        <input type="text" class="form-input toc-source-fields" value="${escapeHtml(sourceFields)}" placeholder="extracted.title, extracted.authors, summaries.summary_text">
+      </div>
+      <div class="form-group toc-item-grid-span-2">
+        <label class="form-label">Prompt</label>
+        <select class="form-input toc-prompt-id">
+          ${buildTocPromptOptions(promptId)}
+        </select>
+      </div>
+    </div>
+  `;
+
+  const modeSelect = card.querySelector('.toc-content-mode');
+  modeSelect?.addEventListener('change', () => updateTocSpecificHintState(card));
+  updateTocSpecificHintState(card);
+
+  card.querySelector('.toc-remove-btn')?.addEventListener('click', () => {
+    card.remove();
+    refreshTocItemLabels();
+    if (tocItemsContainer && tocItemsContainer.children.length === 0) {
+      addTocItemCard();
+    }
+  });
+
+  return card;
+}
+
+function refreshTocItemLabels() {
+  if (!tocItemsContainer) return;
+  const rows = Array.from(tocItemsContainer.querySelectorAll('.toc-item-card'));
+  rows.forEach((row, index) => {
+    const title = row.querySelector('.toc-item-index');
+    if (title) title.textContent = `Item ${index + 1}`;
+  });
+}
+
+function addTocItemCard(item = null) {
+  if (!tocItemsContainer) return;
+  tocItemsContainer.appendChild(createTocItemCard(item || {}));
+  refreshTocItemLabels();
+}
+
+function setContentSchemaFormMode(editing) {
+  const submitButton = contentSchemaForm?.querySelector('button[type="submit"]');
+  if (contentSchemaModalTitle) {
+    contentSchemaModalTitle.textContent = editing ? 'Edit Content Schema' : 'Create Content Schema';
+  }
+  if (submitButton) {
+    setIconButtonContent(submitButton, 'save', editing ? 'Save content schema changes' : 'Save content schema');
+  }
+}
+
+function resetContentSchemaForm() {
+  editingContentSchemaId = null;
+  if (!contentSchemaForm) return;
+
+  contentSchemaForm.reset();
+  const active = contentSchemaForm.querySelector('#content-schema-active');
+  const targetType = contentSchemaForm.querySelector('#content-schema-target-type');
+  const internalLinksCount = contentSchemaForm.querySelector('#content-schema-internal-links');
+  const externalLinksCount = contentSchemaForm.querySelector('#content-schema-external-links');
+  if (active instanceof HTMLInputElement) active.checked = true;
+  if (targetType instanceof HTMLSelectElement) targetType.value = 'book_review';
+  if (internalLinksCount instanceof HTMLInputElement) internalLinksCount.value = '0';
+  if (externalLinksCount instanceof HTMLInputElement) externalLinksCount.value = '0';
+
+  if (tocItemsContainer) {
+    tocItemsContainer.innerHTML = '';
+    addTocItemCard({
+      level: 'h2',
+      title_template: '',
+      content_mode: 'dynamic',
+    });
+  }
+
+  if (contentSchemaFormResult) {
+    contentSchemaFormResult.className = 'form-result';
+    contentSchemaFormResult.textContent = '';
+  }
+  setContentSchemaFormMode(false);
+}
+
+async function openContentSchemaModal(schema = null) {
+  let promptLoadError = null;
+  try {
+    await fetchPromptOptions(true);
+  } catch (err) {
+    cachedPromptOptions = [];
+    promptLoadError = normalizeError(err, 'Failed to load prompt options');
+  }
+  resetContentSchemaForm();
+
+  if (schema && contentSchemaForm) {
+    editingContentSchemaId = schema.id;
+    contentSchemaForm.querySelector('#content-schema-name').value = schema.name || '';
+    contentSchemaForm.querySelector('#content-schema-target-type').value = schema.target_type || 'book_review';
+    contentSchemaForm.querySelector('#content-schema-description').value = schema.description || '';
+    contentSchemaForm.querySelector('#content-schema-min-total-words').value = schema.min_total_words ?? '';
+    contentSchemaForm.querySelector('#content-schema-max-total-words').value = schema.max_total_words ?? '';
+    contentSchemaForm.querySelector('#content-schema-internal-links').value = String(schema.internal_links_count ?? 0);
+    contentSchemaForm.querySelector('#content-schema-external-links').value = String(schema.external_links_count ?? 0);
+    contentSchemaForm.querySelector('#content-schema-active').checked = schema.active !== false;
+
+    if (tocItemsContainer) {
+      tocItemsContainer.innerHTML = '';
+      const tocItems = Array.isArray(schema.toc_template) ? schema.toc_template : [];
+      if (tocItems.length === 0) {
+        addTocItemCard();
+      } else {
+        tocItems.forEach((item) => addTocItemCard(item));
+      }
+    }
+    setContentSchemaFormMode(true);
+  }
+
+  if (promptLoadError && contentSchemaFormResult) {
+    contentSchemaFormResult.className = 'form-result error';
+    contentSchemaFormResult.textContent = `${promptLoadError}. You can still save and assign prompts later.`;
+  }
+
+  if (contentSchemaEditorPanel) {
+    contentSchemaEditorPanel.classList.add('active');
+    contentSchemaEditorPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+function closeContentSchemaModal() {
+  resetContentSchemaForm();
+  if (contentSchemaEditorPanel) {
+    contentSchemaEditorPanel.classList.remove('active');
+  }
+}
+
+function collectTocTemplatePayload() {
+  if (!tocItemsContainer) return [];
+
+  const rows = Array.from(tocItemsContainer.querySelectorAll('.toc-item-card'));
+  if (rows.length === 0) {
+    throw new Error('At least one TOC item is required.');
+  }
+
+  return rows.map((row, index) => {
+    const level = row.querySelector('.toc-level')?.value === 'h3' ? 'h3' : 'h2';
+    const titleTemplate = row.querySelector('.toc-title-template')?.value.trim() || '';
+    const contentMode = row.querySelector('.toc-content-mode')?.value === 'specific' ? 'specific' : 'dynamic';
+    const specificContentHint = row.querySelector('.toc-specific-content-hint')?.value.trim() || null;
+    const minParagraphs = parseOptionalNonNegativeInteger(
+      row.querySelector('.toc-min-paragraphs')?.value,
+      'TOC min paragraphs'
+    );
+    const maxParagraphs = parseOptionalNonNegativeInteger(
+      row.querySelector('.toc-max-paragraphs')?.value,
+      'TOC max paragraphs'
+    );
+    const minWords = parseOptionalNonNegativeInteger(
+      row.querySelector('.toc-min-words')?.value,
+      'TOC min words'
+    );
+    const maxWords = parseOptionalNonNegativeInteger(
+      row.querySelector('.toc-max-words')?.value,
+      'TOC max words'
+    );
+    const sourceFields = parseCommaSeparatedValues(row.querySelector('.toc-source-fields')?.value);
+    const promptId = row.querySelector('.toc-prompt-id')?.value || null;
+
+    if (!titleTemplate) {
+      throw new Error(`TOC item ${index + 1}: title template is required.`);
+    }
+    if (minParagraphs !== null && maxParagraphs !== null && maxParagraphs < minParagraphs) {
+      throw new Error(`TOC item ${index + 1}: max paragraphs must be >= min paragraphs.`);
+    }
+    if (minWords !== null && maxWords !== null && maxWords < minWords) {
+      throw new Error(`TOC item ${index + 1}: max words must be >= min words.`);
+    }
+
+    return {
+      level,
+      title_template: titleTemplate,
+      content_mode: contentMode,
+      specific_content_hint: specificContentHint,
+      min_paragraphs: minParagraphs,
+      max_paragraphs: maxParagraphs,
+      min_words: minWords,
+      max_words: maxWords,
+      source_fields: sourceFields,
+      prompt_id: promptId,
+      position: index,
+    };
+  });
+}
+
+function collectContentSchemaPayload() {
+  if (!contentSchemaForm) throw new Error('Content schema form is unavailable.');
+
+  const name = contentSchemaForm.querySelector('#content-schema-name')?.value.trim() || '';
+  const targetType = contentSchemaForm.querySelector('#content-schema-target-type')?.value.trim() || 'book_review';
+  const description = contentSchemaForm.querySelector('#content-schema-description')?.value.trim() || null;
+  const minTotalWords = parseOptionalNonNegativeInteger(
+    contentSchemaForm.querySelector('#content-schema-min-total-words')?.value,
+    'Min total words'
+  );
+  const maxTotalWords = parseOptionalNonNegativeInteger(
+    contentSchemaForm.querySelector('#content-schema-max-total-words')?.value,
+    'Max total words'
+  );
+  const internalLinksCount = parseRequiredNonNegativeInteger(
+    contentSchemaForm.querySelector('#content-schema-internal-links')?.value || '0',
+    'Internal links count'
+  );
+  const externalLinksCount = parseRequiredNonNegativeInteger(
+    contentSchemaForm.querySelector('#content-schema-external-links')?.value || '0',
+    'External links count'
+  );
+  const active = !!contentSchemaForm.querySelector('#content-schema-active')?.checked;
+  const tocTemplate = collectTocTemplatePayload();
+
+  if (!name) throw new Error('Schema name is required.');
+  if (minTotalWords !== null && maxTotalWords !== null && maxTotalWords < minTotalWords) {
+    throw new Error('Max total words must be greater than or equal to min total words.');
+  }
+
+  return {
+    name,
+    target_type: targetType,
+    description,
+    min_total_words: minTotalWords,
+    max_total_words: maxTotalWords,
+    toc_template: tocTemplate,
+    internal_links_count: internalLinksCount,
+    external_links_count: externalLinksCount,
+    active,
+  };
+}
+
+function renderContentSchemaItem(schema) {
+  const li = document.createElement('li');
+  li.className = 'item-card clickable-card';
+  li.setAttribute('role', 'button');
+  li.setAttribute('tabindex', '0');
+
+  const active = !!schema.active;
+  const minWords = schema.min_total_words ?? '-';
+  const maxWords = schema.max_total_words ?? '-';
+  const tocItemsCount = Array.isArray(schema.toc_template) ? schema.toc_template.length : 0;
+
+  li.innerHTML = `
+    <div>
+      <strong>${escapeHtml(schema.name || '-')}</strong>
+      <div class="text-muted small">${escapeHtml(schema.description || '')}</div>
+      <div class="text-muted small">Type: ${escapeHtml(schema.target_type || '-')} | Words: ${escapeHtml(minWords)} - ${escapeHtml(maxWords)}</div>
+      <div class="text-muted small">TOC Items: ${escapeHtml(tocItemsCount)} | Internal Links: ${escapeHtml(schema.internal_links_count || 0)} | External Links: ${escapeHtml(schema.external_links_count || 0)}</div>
+      <span class="task-status ${active ? 'status-success' : 'status-warning'}">${active ? 'Active' : 'Inactive'}</span>
+    </div>
+    <div class="item-actions">
+      <button type="button" class="btn btn-secondary btn-xs btn-icon-only" data-action="edit" aria-label="Edit content schema" title="Edit content schema">
+        ${renderIconActionContent('edit', 'Edit content schema')}
+      </button>
+      <button type="button" class="btn btn-secondary btn-xs btn-icon-only" data-action="toggle" aria-label="${active ? 'Deactivate content schema' : 'Activate content schema'}" title="${active ? 'Deactivate content schema' : 'Activate content schema'}">
+        ${renderIconActionContent('toggle', active ? 'Deactivate content schema' : 'Activate content schema')}
+      </button>
+      <button type="button" class="btn btn-secondary btn-xs btn-icon-only" data-action="delete" aria-label="Delete content schema" title="Delete content schema">
+        ${renderIconActionContent('delete', 'Delete content schema')}
+      </button>
+    </div>
+  `;
+
+  const openEditor = () => openContentSchemaModal(schema).catch((err) => {
+    if (contentSchemaResult) {
+      contentSchemaResult.className = 'form-result error';
+      contentSchemaResult.textContent = normalizeError(err, 'Failed to open content schema');
+    }
+  });
+
+  li.querySelector('[data-action="edit"]')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    openEditor();
+  });
+
+  li.addEventListener('click', (event) => {
+    if (event.target instanceof Element && event.target.closest('button, a, input, select, textarea, label')) return;
+    openEditor();
+  });
+
+  li.addEventListener('keydown', (event) => {
+    if (event.target instanceof Element && event.target.closest('button, a, input, select, textarea, label')) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      openEditor();
+    }
+  });
+
+  li.querySelector('[data-action="toggle"]')?.addEventListener('click', async (event) => {
+    event.stopPropagation();
+    try {
+      const response = await fetch(`/settings/content-schemas/${schema.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: !active }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(parseApiError(data, 'Failed to update content schema'));
+
+      if (contentSchemaResult) {
+        contentSchemaResult.className = 'form-result success';
+        contentSchemaResult.textContent = 'Content schema updated successfully.';
+      }
+      fetchContentSchemas();
+    } catch (err) {
+      if (contentSchemaResult) {
+        contentSchemaResult.className = 'form-result error';
+        contentSchemaResult.textContent = normalizeError(err, 'Failed to update content schema');
+      }
+    }
+  });
+
+  li.querySelector('[data-action="delete"]')?.addEventListener('click', async (event) => {
+    event.stopPropagation();
+    if (!confirm(`Delete content schema "${schema.name || schema.id}"?`)) return;
+
+    try {
+      const response = await fetch(`/settings/content-schemas/${schema.id}`, { method: 'DELETE' });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(parseApiError(data, 'Failed to delete content schema'));
+      }
+
+      if (editingContentSchemaId === schema.id) {
+        resetContentSchemaForm();
+      }
+
+      if (contentSchemaResult) {
+        contentSchemaResult.className = 'form-result success';
+        contentSchemaResult.textContent = 'Content schema deleted successfully.';
+      }
+      fetchContentSchemas();
+    } catch (err) {
+      if (contentSchemaResult) {
+        contentSchemaResult.className = 'form-result error';
+        contentSchemaResult.textContent = normalizeError(err, 'Failed to delete content schema');
+      }
+    }
+  });
+
+  return li;
+}
+
+async function fetchContentSchemas() {
+  if (!contentSchemaList) return;
+
+  contentSchemaList.innerHTML = '<li class="loading">Loading...</li>';
+
+  try {
+    const response = await fetch('/settings/content-schemas');
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(parseApiError(data, 'Failed to load content schemas'));
+
+    contentSchemaList.innerHTML = '';
+    if (!Array.isArray(data) || data.length === 0) {
+      contentSchemaList.innerHTML = '<li class="empty-state">No content schemas configured</li>';
+      return;
+    }
+
+    data.forEach((schema) => contentSchemaList.appendChild(renderContentSchemaItem(schema)));
+  } catch (err) {
+    contentSchemaList.innerHTML = `<li class="empty-state">Error: ${escapeHtml(normalizeError(err, 'Failed to load content schemas'))}</li>`;
+  } finally {
+    initializePromptCategories(true).catch(() => {});
+  }
+}
+
+if (contentSchemaForm) {
+  contentSchemaForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    if (contentSchemaFormResult) {
+      contentSchemaFormResult.className = 'form-result';
+      contentSchemaFormResult.textContent = editingContentSchemaId ? 'Updating...' : 'Saving...';
+    }
+
+    try {
+      const payload = collectContentSchemaPayload();
+      const endpoint = editingContentSchemaId
+        ? `/settings/content-schemas/${editingContentSchemaId}`
+        : '/settings/content-schemas';
+      const method = editingContentSchemaId ? 'PATCH' : 'POST';
+
+      const response = await fetch(endpoint, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(parseApiError(data, 'Failed to save content schema'));
+
+      if (contentSchemaResult) {
+        contentSchemaResult.className = 'form-result success';
+        contentSchemaResult.textContent = editingContentSchemaId
+          ? 'Content schema updated successfully.'
+          : 'Content schema created successfully.';
+      }
+
+      closeContentSchemaModal();
+      fetchContentSchemas();
+    } catch (err) {
+      if (contentSchemaFormResult) {
+        contentSchemaFormResult.className = 'form-result error';
+        contentSchemaFormResult.textContent = normalizeError(err, 'Failed to save content schema');
       }
     }
   });
@@ -2307,6 +3456,46 @@ if (promptCancelBtn) {
   promptCancelBtn.addEventListener('click', closePromptModal);
 }
 
+if (promptFilterCategoryInput) {
+  promptFilterCategoryInput.addEventListener('change', () => {
+    fetchPrompts();
+  });
+}
+
+if (promptFilterProviderInput) {
+  promptFilterProviderInput.addEventListener('change', () => {
+    fetchPrompts();
+  });
+}
+
+if (promptFilterNameInput) {
+  promptFilterNameInput.addEventListener('input', () => {
+    window.clearTimeout(promptSearchDebounceTimer);
+    promptSearchDebounceTimer = window.setTimeout(() => {
+      fetchPrompts();
+    }, 300);
+  });
+}
+
+if (createContentSchemaBtn) {
+  createContentSchemaBtn.addEventListener('click', () => {
+    openContentSchemaModal().catch((err) => {
+      if (contentSchemaResult) {
+        contentSchemaResult.className = 'form-result error';
+        contentSchemaResult.textContent = normalizeError(err, 'Failed to open content schema');
+      }
+    });
+  });
+}
+
+if (contentSchemaCancelBtn) {
+  contentSchemaCancelBtn.addEventListener('click', closeContentSchemaModal);
+}
+
+if (addTocItemBtn) {
+  addTocItemBtn.addEventListener('click', () => addTocItemCard());
+}
+
 if (taskEditCancelBtn) {
   taskEditCancelBtn.addEventListener('click', closeTaskEditModal);
 }
@@ -2317,6 +3506,8 @@ if (cancelEditTaskBtn) {
     if (submitForm) submitForm.reset();
     updateScheduleState();
     resetSubmitFormLinks();
+    initializeMainCategorySources();
+    initializeContentSchemaOptions();
     if (submitResult) {
       submitResult.className = 'form-result';
       submitResult.textContent = '';
@@ -2381,6 +3572,18 @@ if (runImmediatelyInput) {
   runImmediatelyInput.addEventListener('change', updateScheduleState);
 }
 
+if (mainCategoryCredentialInput) {
+  mainCategoryCredentialInput.addEventListener('change', async () => {
+    const credentialId = String(mainCategoryCredentialInput.value || '');
+    storeWordpressCredentialId(credentialId);
+    try {
+      await fetchMainCategoriesByCredential(credentialId);
+    } catch (err) {
+      setMainCategoryLoading(normalizeError(err, 'Error loading categories'));
+    }
+  });
+}
+
 if (otherLinksContainer) {
   otherLinksContainer.addEventListener('click', (event) => {
     const target = event.target instanceof Element ? event.target : null;
@@ -2437,17 +3640,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
   applyStaticActionIcons();
   updateScheduleState();
+  initializeMainCategorySources();
+  initializeContentSchemaOptions();
   setSubmitFormMode(false);
   updateTaskEditScheduleState();
   resetSubmitFormLinks();
 
   setCredentialFormMode(false);
   setPromptFormMode(false);
+  applyPromptProviderOptions([]);
+  initializePromptCategories().catch(() => {});
+  setContentSchemaFormMode(false);
+  resetContentSchemaForm();
+  if (contentSchemaEditorPanel) contentSchemaEditorPanel.classList.remove('active');
 
   updateHealth();
   fetchStats();
   fetchTasks();
   fetchCredentials();
+  fetchContentSchemas();
   fetchPrompts();
   fetchPipelines();
 });

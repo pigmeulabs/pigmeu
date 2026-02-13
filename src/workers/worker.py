@@ -34,12 +34,16 @@ def ping():
 
 
 @app.task(name="start_pipeline")
-def start_pipeline(submission_id: str, amazon_url: str):
+def start_pipeline(submission_id: str, amazon_url: str, pipeline_id: str = "book_review_v2"):
     """Entry task to start scraping pipeline from web requests."""
     try:
         from src.workers.scraper_tasks import start_scraping_pipeline
 
-        start_scraping_pipeline(submission_id=submission_id, amazon_url=amazon_url)
-        return {"status": "started", "submission_id": submission_id}
+        start_scraping_pipeline(
+            submission_id=submission_id,
+            amazon_url=amazon_url,
+            pipeline_id=pipeline_id,
+        )
+        return {"status": "started", "submission_id": submission_id, "pipeline_id": pipeline_id}
     except Exception as e:
         return {"status": "error", "error": str(e)}

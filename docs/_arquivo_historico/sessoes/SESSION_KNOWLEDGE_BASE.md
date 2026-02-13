@@ -39,7 +39,7 @@
   - 1x H1 (formato descritivo, frequentemente incluindo "(PDF)")
   - H2: 2-4 seções principais (Conteúdo, Sobre os autores, Detalhes, Download, etc.)
   - H3: 3-8 subseções detalhando conceitos, capítulos ou bios
-- Estrutura obrigatória: introdução com "Você vai ler nesse artigo:", conteúdo principal, seção "Sobre os autores", detalhes do livro em bullets, CTA de download, seção de doação (PIX), seção de login/cadastro e artigos relacionados.
+- Estrutura obrigatória: introdução com "Você vai ler nesse artigo:", conteúdo principal, seção "Sobre os autores", detalhes do livro em bullets, CTA de download,  artigos relacionados.
 - Tamanho: alvo total 2000-3500 palavras; seções e H3 têm metas próprias (configuradas no YAML).
 - Tom: `Português Brasileiro`, registro profissional-educacional, acessível e prático; variações por tipo de livro (técnico vs. metodológico vs. persuasivo).
 - Links: 8-15 links internos; 3-8 externos (Amazon, Goodreads, editoras).

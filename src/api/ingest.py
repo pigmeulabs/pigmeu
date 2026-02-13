@@ -9,8 +9,14 @@ that flows through the processing pipeline.
 from fastapi import APIRouter, HTTPException, Depends, status
 from src.models.schemas import SubmissionCreate, SubmissionResponse
 from src.models.enums import SubmissionStatus
-from src.db.repositories import SubmissionRepository
-from src.api.dependencies import get_submission_repo
+from src.db.repositories import SubmissionRepository, PipelineConfigRepository, CredentialRepository, ContentSchemaRepository
+from src.api.dependencies import (
+    get_submission_repo,
+    get_pipeline_repo,
+    get_credential_repo,
+    get_content_schema_repo,
+)
+from src.api.settings import _ensure_system_defaults, _ensure_pipeline_by_id
 import logging
 from src.workers.worker import start_pipeline
 
@@ -29,10 +35,25 @@ router = APIRouter(prefix="/submit", tags=["Submissions"])
 async def submit_book(
     submission: SubmissionCreate,
     repo: SubmissionRepository = Depends(get_submission_repo),
+    pipeline_repo: PipelineConfigRepository = Depends(get_pipeline_repo),
+    credential_repo: CredentialRepository = Depends(get_credential_repo),
+    content_schema_repo: ContentSchemaRepository = Depends(get_content_schema_repo),
 ) -> SubmissionResponse:
     """Submit a new book for review processing."""
 
     try:
+        await _ensure_system_defaults(
+            pipeline_repo=pipeline_repo,
+            credential_repo=credential_repo,
+            content_schema_repo=content_schema_repo,
+        )
+        selected_pipeline = await _ensure_pipeline_by_id(pipeline_repo, submission.pipeline_id)
+        if not selected_pipeline:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid pipeline_id: {submission.pipeline_id}",
+            )
+
         logger.info("Checking for duplicate submission: %s", submission.amazon_url)
         duplicate_id = await repo.check_duplicate(str(submission.amazon_url))
 
@@ -54,7 +75,9 @@ async def submit_book(
             textual_information=submission.textual_information,
             run_immediately=submission.run_immediately,
             schedule_execution=submission.schedule_execution,
+            pipeline_id=str(selected_pipeline.get("pipeline_id") or submission.pipeline_id),
             main_category=submission.main_category,
+            content_schema_id=submission.content_schema_id,
             article_status=submission.article_status,
             user_approval_required=submission.user_approval_required,
         )
@@ -64,7 +87,11 @@ async def submit_book(
         if submission.run_immediately:
             try:
                 logger.info("Enqueueing scraping pipeline for: %s", submission_id)
-                start_pipeline.delay(submission_id=submission_id, amazon_url=str(submission.amazon_url))
+                start_pipeline.delay(
+                    submission_id=submission_id,
+                    amazon_url=str(submission.amazon_url),
+                    pipeline_id=str(doc.get("pipeline_id") or selected_pipeline.get("pipeline_id") or "book_review_v2"),
+                )
             except Exception:
                 logger.exception("Failed to enqueue scraping pipeline")
 
@@ -79,7 +106,9 @@ async def submit_book(
             textual_information=doc.get("textual_information"),
             run_immediately=doc.get("run_immediately", True),
             schedule_execution=doc.get("schedule_execution"),
+            pipeline_id=str(doc.get("pipeline_id") or "book_review_v2"),
             main_category=doc.get("main_category"),
+            content_schema_id=doc.get("content_schema_id"),
             article_status=doc.get("article_status"),
             user_approval_required=doc.get("user_approval_required", False),
             status=SubmissionStatus(doc["status"]),

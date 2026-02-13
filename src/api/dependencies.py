@@ -38,6 +38,13 @@ async def get_pipeline_repo(
     return PipelineConfigRepository(db)
 
 
+async def get_content_schema_repo(
+    db: AsyncIOMotorDatabase = Depends(get_database),
+) -> 'ContentSchemaRepository':
+    from src.db.repositories import ContentSchemaRepository
+    return ContentSchemaRepository(db)
+
+
 async def get_submission_repo(
     db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> SubmissionRepository:
