@@ -431,7 +431,7 @@ Additional topics related to the book's content."""
 
 @pytest.mark.asyncio
 async def test_generate_valid_article_max_retries():
-    """Test article generation failure after max retries."""
+    """Test article generation returns best attempt after max retries."""
     
     # Mock book data
     book_data = {
@@ -459,6 +459,7 @@ Too short."""
         "word_count": 50
     })
     
-    # Test that max retries raises exception
-    with pytest.raises(ValueError, match="Failed to generate valid article after 2 attempts"):
-        await structurer.generate_valid_article(book_data, book_data["context"], max_retries=2)
+    article = await structurer.generate_valid_article(book_data, book_data["context"], max_retries=2)
+
+    # Returns best available article instead of raising when all attempts fail validation.
+    assert article == mock_invalid_article

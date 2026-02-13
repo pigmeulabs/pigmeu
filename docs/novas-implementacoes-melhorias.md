@@ -76,7 +76,10 @@ Na interface de edição/cadatro de prompts, inclua umanovo campo para definir o
 
 ### ANALISAR E DOCUMENTAR ESTADO ATUAL DO SISTEMA.
 
-Execute uma simulação/rotina de uso exploratório minuciosas em todas as funcionalidades/módulos do sistema, para em seguida responda com uma lista de módulos e funcionalidades existnetes.
+Execute uma simulação/rotina de uso exploratório minuciosas em todas as funcionalidades/módulos do sistema, para em seguida responda com uma lista de módulos e funcionalidades existnetes. Considere os padrões de documentação utilizados, e proponha ua estrutura para uma nova docuemntação COMPLETA do sistema (para subtituir a atual).  
+
+ss
+swe 
 
 Na seuência, mova todo o conteúdo da pasta docs para "docs-deprecated". E inicie a criação da nova documentação atualizada com base na sua analise. Responda listando uma proposta de documentos a serem criados (eles subtituiram toda a documentação atual.).
 

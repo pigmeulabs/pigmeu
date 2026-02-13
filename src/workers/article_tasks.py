@@ -301,18 +301,16 @@ def generate_article_task(self, submission_id: str, skip_config_delay: bool = Fa
                     },
                     max_retries=3,
                 )
-            except Exception:
-                # Deterministic fallback keeps pipeline moving even when strict validation fails.
-                fallback_topics = structurer._fallback_topics(book_data)
-                if selected_schema:
-                    article_content = structurer._build_schema_template_article(
-                        book_data=book_data,
-                        context=context,
-                        content_schema=selected_schema,
-                        topics=fallback_topics,
-                    )
-                else:
-                    article_content = structurer._build_template_article(book_data, fallback_topics, context)
+            except Exception as generation_error:
+                await submission_repo.update_status(
+                    submission_id,
+                    SubmissionStatus.FAILED,
+                    {
+                        "current_step": "article_generation",
+                        "error": str(generation_error),
+                    },
+                )
+                raise
 
             lines = article_content.splitlines()
             gen_title = next(

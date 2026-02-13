@@ -1,0 +1,225 @@
+[
+  {
+    "_id": {
+      "$oid": "698e87e41db22bb4c798c444"
+    },
+    "name": "Book Review",
+    "slug": "book-review",
+    "description": "Pipeline para extracao de dados, consolidacao de contexto e geracao de conteudo de Book Review.",
+    "usage_type": "content_copilot",
+    "version": "2.0",
+    "steps": [
+      {
+        "id": "amazon_scrape",
+        "name": "Amazon link scrape",
+        "description": "Extrai metadados bibliograficos da pagina do livro na Amazon.",
+        "type": "scraping",
+        "uses_ai": false
+      },
+      {
+        "id": "additional_links_scrape",
+        "name": "Additional links scrape",
+        "description": "Processa links adicionais e extrai dados bibliograficos via IA.",
+        "type": "scraping+llm",
+        "uses_ai": true,
+        "ai": {
+          "provider": "mistral",
+          "model_id": "mistral-large-latest",
+          "credential_id": "698e6d313de338c729ae50a4",
+          "prompt_id": "698e725e6866817ab0c96c30",
+          "default_credential_name": "Mistral A",
+          "default_prompt_purpose": "book_review_link_bibliography_extract"
+        }
+      },
+      {
+        "id": "summarize_additional_links",
+        "name": "Summarize additional links",
+        "description": "Gera resumo dos links adicionais com foco em livro e autor.",
+        "type": "llm",
+        "uses_ai": true,
+        "ai": {
+          "provider": "groq",
+          "model_id": "llama-3.3-70b-versatile",
+          "credential_id": null,
+          "prompt_id": "698e725e6866817ab0c96c31",
+          "default_credential_name": "GROC A",
+          "default_prompt_purpose": "book_review_link_summary"
+        }
+      },
+      {
+        "id": "consolidate_book_data",
+        "name": "Consolidate book data",
+        "description": "Consolida dados bibliograficos sem duplicidade.",
+        "type": "data-processing",
+        "uses_ai": false
+      },
+      {
+        "id": "internet_research",
+        "name": "Internet research",
+        "description": "Pesquisa web sobre livro/autor e sintetiza assuntos e temas.",
+        "type": "search+llm",
+        "uses_ai": true,
+        "ai": {
+          "provider": "groq",
+          "model_id": "llama-3.3-70b-versatile",
+          "credential_id": null,
+          "prompt_id": null,
+          "default_credential_name": "GROC A",
+          "default_prompt_purpose": "book_review_web_research"
+        }
+      },
+      {
+        "id": "context_generation",
+        "name": "Generate context",
+        "description": "Gera base de conhecimento consolidada para suportar a escrita.",
+        "type": "llm",
+        "uses_ai": true,
+        "ai": {
+          "provider": "openai",
+          "model_id": "gpt-4o-mini",
+          "credential_id": null,
+          "prompt_id": null,
+          "default_credential_name": null,
+          "default_prompt_purpose": "context"
+        }
+      },
+      {
+        "id": "article_generation",
+        "name": "Generate article",
+        "description": "Gera artigo final em markdown a partir do contexto produzido.",
+        "type": "llm",
+        "uses_ai": true,
+        "ai": {
+          "provider": "openai",
+          "model_id": "gpt-4o-mini",
+          "credential_id": "698e6d313de338c729ae50a4",
+          "prompt_id": "698eabef466b6fde5e9e4d42",
+          "default_credential_name": null,
+          "default_prompt_purpose": "article"
+        },
+        "delay_seconds": 0
+      },
+      {
+        "id": "ready_for_review",
+        "name": "Ready for review",
+        "description": "Etapa final de aprovacao para revisao/publicacao.",
+        "type": "workflow",
+        "uses_ai": false
+      }
+    ],
+    "pipeline_id": "book_review_v2",
+    "updated_at": {
+      "$date": "2026-02-13T06:45:02.763Z"
+    },
+    "created_at": {
+      "$date": "2026-02-13T02:09:40.206Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "698ec2b6b0c3df74aa8e3320"
+    },
+    "name": "Links Content",
+    "slug": "links-content",
+    "description": "Pipeline para gerar artigo a partir de links fornecidos pelo usuario.",
+    "usage_type": "content_copilot",
+    "version": "1.0",
+    "steps": [
+      {
+        "id": "links_scrape",
+        "name": "Analyze source links",
+        "description": "Leitura e analise de cada link informado para extrair dados relevantes.",
+        "type": "scraping+llm",
+        "uses_ai": true,
+        "delay_seconds": 0,
+        "ai": {
+          "provider": "groq",
+          "model_id": "llama-3.3-70b-versatile",
+          "credential_id": null,
+          "prompt_id": null,
+          "default_credential_name": "GROC A",
+          "default_prompt_purpose": "links_content_analyze"
+        }
+      },
+      {
+        "id": "extract_facts",
+        "name": "Extract structured facts",
+        "description": "Extrai fatos estruturados dos links processados.",
+        "type": "llm",
+        "uses_ai": true,
+        "delay_seconds": 0,
+        "ai": {
+          "provider": "mistral",
+          "model_id": "mistral-large-latest",
+          "credential_id": null,
+          "prompt_id": null,
+          "default_credential_name": "Mistral A",
+          "default_prompt_purpose": "links_content_extract_facts"
+        }
+      },
+      {
+        "id": "consolidate_data",
+        "name": "Consolidate data",
+        "description": "Consolida dados sem duplicidades e prepara contexto.",
+        "type": "data-processing",
+        "uses_ai": false,
+        "delay_seconds": 0
+      },
+      {
+        "id": "context_generation",
+        "name": "Generate context",
+        "description": "Gera contexto estruturado para redação do artigo.",
+        "type": "llm",
+        "uses_ai": true,
+        "delay_seconds": 0,
+        "ai": {
+          "provider": "groq",
+          "model_id": "llama-3.3-70b-versatile",
+          "credential_id": null,
+          "prompt_id": null,
+          "default_credential_name": "GROC A",
+          "default_prompt_purpose": "context"
+        }
+      },
+      {
+        "id": "article_generation",
+        "name": "Generate article",
+        "description": "Gera artigo final em markdown a partir dos dados consolidados.",
+        "type": "llm",
+        "uses_ai": true,
+        "delay_seconds": 0,
+        "ai": {
+          "provider": "openai",
+          "model_id": "gpt-4o-mini",
+          "credential_id": null,
+          "prompt_id": null,
+          "default_credential_name": null,
+          "default_prompt_purpose": "article"
+        }
+      },
+      {
+        "id": "quality_validation",
+        "name": "Quality validation",
+        "description": "Valida estrutura, consistencia e requisitos de qualidade do artigo.",
+        "type": "quality-gate",
+        "uses_ai": false,
+        "delay_seconds": 0
+      },
+      {
+        "id": "ready_for_review",
+        "name": "Ready for review",
+        "description": "Etapa final de aprovacao para revisao/publicacao.",
+        "type": "workflow",
+        "uses_ai": false,
+        "delay_seconds": 0
+      }
+    ],
+    "pipeline_id": "links_content_v1",
+    "updated_at": {
+      "$date": "2026-02-13T06:20:38.109Z"
+    },
+    "created_at": {
+      "$date": "2026-02-13T06:20:38.109Z"
+    }
+  }
+]

@@ -1,0 +1,485 @@
+[
+  {
+    "_id": {
+      "$oid": "698eb160487bd88eb702b981"
+    },
+    "name": "Book Review - Estrutura Editorial Completa",
+    "active": true,
+    "created_at": {
+      "$date": "2026-02-13T05:06:40.249Z"
+    },
+    "description": "Estrutura editorial esperada para artigos de Book Review, incluindo título SEO (até 60 caracteres), seções obrigatórias, bloco temático específico com subtemas, e seções finais orientadas a links internos/externos.",
+    "external_links_count": 3,
+    "internal_links_count": 8,
+    "max_total_words": null,
+    "min_total_words": 1320,
+    "target_type": "book_review",
+    "toc_template": [
+      {
+        "level": "h2",
+        "title_template": "Introdução ao Tema do Livro",
+        "content_mode": "specific",
+        "specific_content_hint": "Contexto geral e relevância do tema para o público-alvo.",
+        "min_paragraphs": null,
+        "max_paragraphs": null,
+        "min_words": 150,
+        "max_words": null,
+        "source_fields": [
+          "submission.title",
+          "submission.author_name",
+          "book.extracted.consolidated_bibliographic",
+          "book.extracted.web_research",
+          "summaries",
+          "knowledge_base.markdown_content"
+        ],
+        "prompt_id": "698eabef466b6fde5e9e4d41",
+        "position": 0
+      },
+      {
+        "level": "h2",
+        "title_template": "Contexto e Motivação",
+        "content_mode": "specific",
+        "specific_content_hint": "Problemas que o livro resolve e lacunas na literatura.",
+        "min_paragraphs": null,
+        "max_paragraphs": null,
+        "min_words": 150,
+        "max_words": null,
+        "source_fields": [
+          "submission.title",
+          "submission.author_name",
+          "book.extracted.consolidated_bibliographic",
+          "book.extracted.web_research",
+          "summaries",
+          "knowledge_base.markdown_content"
+        ],
+        "prompt_id": null,
+        "position": 1
+      },
+      {
+        "level": "h2",
+        "title_template": "Impacto e Aplicabilidade",
+        "content_mode": "dynamic",
+        "specific_content_hint": "Aplicação prática dos conceitos e casos de uso.",
+        "min_paragraphs": null,
+        "max_paragraphs": null,
+        "min_words": 150,
+        "max_words": null,
+        "source_fields": [
+          "submission.title",
+          "submission.author_name",
+          "book.extracted.consolidated_bibliographic",
+          "book.extracted.web_research",
+          "summaries",
+          "knowledge_base.markdown_content"
+        ],
+        "prompt_id": null,
+        "position": 2
+      },
+      {
+        "level": "h2",
+        "title_template": "[Tópico Específico do Livro]",
+        "content_mode": "dynamic",
+        "specific_content_hint": "Definir dinamicamente com base no tema central do livro (ex.: metodologia, framework, estudo de caso).",
+        "min_paragraphs": null,
+        "max_paragraphs": null,
+        "min_words": 200,
+        "max_words": null,
+        "source_fields": [
+          "book.extracted.web_research.topics",
+          "summaries.topics",
+          "knowledge_base.markdown_content"
+        ],
+        "prompt_id": null,
+        "position": 3
+      },
+      {
+        "level": "h3",
+        "title_template": "[Subtema 1]",
+        "content_mode": "dynamic",
+        "specific_content_hint": "Subtema derivado do tópico específico.",
+        "min_paragraphs": null,
+        "max_paragraphs": null,
+        "min_words": 80,
+        "max_words": null,
+        "source_fields": [
+          "book.extracted.web_research.topics",
+          "summaries.key_points",
+          "knowledge_base.markdown_content"
+        ],
+        "prompt_id": null,
+        "position": 4
+      },
+      {
+        "level": "h3",
+        "title_template": "[Subtema 2]",
+        "content_mode": "dynamic",
+        "specific_content_hint": "Subtema derivado do tópico específico.",
+        "min_paragraphs": null,
+        "max_paragraphs": null,
+        "min_words": 80,
+        "max_words": null,
+        "source_fields": [
+          "book.extracted.web_research.topics",
+          "summaries.key_points",
+          "knowledge_base.markdown_content"
+        ],
+        "prompt_id": null,
+        "position": 5
+      },
+      {
+        "level": "h3",
+        "title_template": "[Subtema 3] (opcional)",
+        "content_mode": "dynamic",
+        "specific_content_hint": "Subtema opcional quando houver material suficiente.",
+        "min_paragraphs": null,
+        "max_paragraphs": null,
+        "min_words": 80,
+        "max_words": null,
+        "source_fields": [
+          "book.extracted.web_research.topics",
+          "summaries.key_points",
+          "knowledge_base.markdown_content"
+        ],
+        "prompt_id": null,
+        "position": 6
+      },
+      {
+        "level": "h3",
+        "title_template": "[Subtema 4] (opcional)",
+        "content_mode": "dynamic",
+        "specific_content_hint": "Subtema opcional quando houver material suficiente.",
+        "min_paragraphs": null,
+        "max_paragraphs": null,
+        "min_words": 80,
+        "max_words": null,
+        "source_fields": [
+          "book.extracted.web_research.topics",
+          "summaries.key_points",
+          "knowledge_base.markdown_content"
+        ],
+        "prompt_id": null,
+        "position": 7
+      },
+      {
+        "level": "h2",
+        "title_template": "Detalhes do Livro",
+        "content_mode": "specific",
+        "specific_content_hint": "Metadados técnicos: autor, ISBN, editora e links para Goodreads/Amazon.",
+        "min_paragraphs": null,
+        "max_paragraphs": null,
+        "min_words": 100,
+        "max_words": null,
+        "source_fields": [
+          "submission.title",
+          "submission.author_name",
+          "submission.amazon_url",
+          "submission.goodreads_url",
+          "book.extracted.consolidated_bibliographic"
+        ],
+        "prompt_id": null,
+        "position": 8
+      },
+      {
+        "level": "h2",
+        "title_template": "Sobre o Autor",
+        "content_mode": "specific",
+        "specific_content_hint": "Biografia resumida e principais obras do autor.",
+        "min_paragraphs": null,
+        "max_paragraphs": null,
+        "min_words": 100,
+        "max_words": null,
+        "source_fields": [
+          "submission.author_name",
+          "book.extracted.consolidated_bibliographic",
+          "book.extracted.web_research",
+          "summaries"
+        ],
+        "prompt_id": null,
+        "position": 9
+      },
+      {
+        "level": "h2",
+        "title_template": "Download",
+        "content_mode": "specific",
+        "specific_content_hint": "Links para compra/download legal do livro.",
+        "min_paragraphs": null,
+        "max_paragraphs": null,
+        "min_words": 50,
+        "max_words": null,
+        "source_fields": [
+          "submission.amazon_url",
+          "submission.goodreads_url",
+          "book.extracted.consolidated_bibliographic.price_book",
+          "book.extracted.consolidated_bibliographic.price_ebook"
+        ],
+        "prompt_id": null,
+        "position": 10
+      },
+      {
+        "level": "h2",
+        "title_template": "Assuntos Relacionados",
+        "content_mode": "specific",
+        "specific_content_hint": "Lista de tópicos com links internos para SEO.",
+        "min_paragraphs": null,
+        "max_paragraphs": null,
+        "min_words": 80,
+        "max_words": null,
+        "source_fields": [
+          "book.extracted.web_research.topics",
+          "summaries.topics",
+          "knowledge_base.topics_index"
+        ],
+        "prompt_id": null,
+        "position": 11
+      },
+      {
+        "level": "h2",
+        "title_template": "Artigos Recomendados",
+        "content_mode": "specific",
+        "specific_content_hint": "Incluir 3 a 5 artigos do site com links internos.",
+        "min_paragraphs": null,
+        "max_paragraphs": null,
+        "min_words": 80,
+        "max_words": null,
+        "source_fields": [
+          "submission.main_category",
+          "book.extracted.web_research.topics"
+        ],
+        "prompt_id": null,
+        "position": 12
+      }
+    ],
+    "updated_at": {
+      "$date": "2026-02-13T07:00:58.770Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "698ec2b6b0c3df74aa8e3322"
+    },
+    "name": "Book Review - Estrutura Completa v1",
+    "target_type": "book_review",
+    "description": "Schema padrão completo para geração de artigo de Book Review.",
+    "min_total_words": 1300,
+    "max_total_words": 2600,
+    "toc_template": [
+      {
+        "level": "h2",
+        "title_template": "Introdução ao Tema do Livro",
+        "content_mode": "specific",
+        "specific_content_hint": "Contexto geral e relevância do tema para o público-alvo.",
+        "min_paragraphs": 2,
+        "max_paragraphs": 4,
+        "min_words": 150,
+        "max_words": 260,
+        "source_fields": [
+          "title",
+          "author",
+          "consolidated_bibliographic.theme",
+          "web_research.topics"
+        ],
+        "prompt_id": null,
+        "position": 0
+      },
+      {
+        "level": "h2",
+        "title_template": "Contexto e Motivação",
+        "content_mode": "specific",
+        "specific_content_hint": "Problemas que o livro resolve e lacunas na literatura.",
+        "min_paragraphs": 2,
+        "max_paragraphs": 4,
+        "min_words": 150,
+        "max_words": 260,
+        "source_fields": [
+          "consolidated_bibliographic",
+          "web_research.key_insights"
+        ],
+        "prompt_id": null,
+        "position": 1
+      },
+      {
+        "level": "h2",
+        "title_template": "Impacto e Aplicabilidade",
+        "content_mode": "dynamic",
+        "specific_content_hint": "Aplicação prática dos conceitos e casos de uso.",
+        "min_paragraphs": 2,
+        "max_paragraphs": 4,
+        "min_words": 150,
+        "max_words": 280,
+        "source_fields": [
+          "web_research.research_markdown",
+          "summaries.summary_text"
+        ],
+        "prompt_id": null,
+        "position": 2
+      },
+      {
+        "level": "h2",
+        "title_template": "[Tópico Específico do Livro]",
+        "content_mode": "dynamic",
+        "specific_content_hint": "Selecionar o tópico mais relevante ao livro com base nos dados consolidados.",
+        "min_paragraphs": 3,
+        "max_paragraphs": 5,
+        "min_words": 200,
+        "max_words": 360,
+        "source_fields": [
+          "web_research.topics",
+          "summaries.topics"
+        ],
+        "prompt_id": null,
+        "position": 3
+      },
+      {
+        "level": "h3",
+        "title_template": "[Subtema 1]",
+        "content_mode": "dynamic",
+        "specific_content_hint": "",
+        "min_paragraphs": 1,
+        "max_paragraphs": 2,
+        "min_words": 80,
+        "max_words": 160,
+        "source_fields": [
+          "summaries.key_points"
+        ],
+        "prompt_id": null,
+        "position": 4
+      },
+      {
+        "level": "h3",
+        "title_template": "[Subtema 2]",
+        "content_mode": "dynamic",
+        "specific_content_hint": "",
+        "min_paragraphs": 1,
+        "max_paragraphs": 2,
+        "min_words": 80,
+        "max_words": 160,
+        "source_fields": [
+          "summaries.key_points"
+        ],
+        "prompt_id": null,
+        "position": 5
+      },
+      {
+        "level": "h3",
+        "title_template": "[Subtema 3] (opcional)",
+        "content_mode": "dynamic",
+        "specific_content_hint": "",
+        "min_paragraphs": 1,
+        "max_paragraphs": 2,
+        "min_words": 80,
+        "max_words": 160,
+        "source_fields": [
+          "summaries.key_points"
+        ],
+        "prompt_id": null,
+        "position": 6
+      },
+      {
+        "level": "h3",
+        "title_template": "[Subtema 4] (opcional)",
+        "content_mode": "dynamic",
+        "specific_content_hint": "",
+        "min_paragraphs": 1,
+        "max_paragraphs": 2,
+        "min_words": 80,
+        "max_words": 160,
+        "source_fields": [
+          "summaries.key_points"
+        ],
+        "prompt_id": null,
+        "position": 7
+      },
+      {
+        "level": "h2",
+        "title_template": "Detalhes do Livro",
+        "content_mode": "specific",
+        "specific_content_hint": "Incluir dados bibliográficos técnicos com links para Amazon/Goodreads.",
+        "min_paragraphs": 1,
+        "max_paragraphs": 3,
+        "min_words": 100,
+        "max_words": 220,
+        "source_fields": [
+          "consolidated_bibliographic",
+          "metadata.amazon_url",
+          "goodreads_url"
+        ],
+        "prompt_id": null,
+        "position": 8
+      },
+      {
+        "level": "h2",
+        "title_template": "Sobre o Autor",
+        "content_mode": "specific",
+        "specific_content_hint": "Biografia resumida e principais obras.",
+        "min_paragraphs": 1,
+        "max_paragraphs": 3,
+        "min_words": 100,
+        "max_words": 220,
+        "source_fields": [
+          "author",
+          "web_research.research_markdown",
+          "summaries.summary_text"
+        ],
+        "prompt_id": null,
+        "position": 9
+      },
+      {
+        "level": "h2",
+        "title_template": "Download",
+        "content_mode": "specific",
+        "specific_content_hint": "Links para compra/download legal do livro.",
+        "min_paragraphs": 1,
+        "max_paragraphs": 2,
+        "min_words": 50,
+        "max_words": 140,
+        "source_fields": [
+          "metadata.amazon_url",
+          "goodreads_url",
+          "other_links"
+        ],
+        "prompt_id": null,
+        "position": 10
+      },
+      {
+        "level": "h2",
+        "title_template": "Assuntos Relacionados",
+        "content_mode": "dynamic",
+        "specific_content_hint": "Lista de tópicos com links internos para SEO.",
+        "min_paragraphs": 1,
+        "max_paragraphs": 3,
+        "min_words": 80,
+        "max_words": 180,
+        "source_fields": [
+          "web_research.topics",
+          "summaries.topics"
+        ],
+        "prompt_id": null,
+        "position": 11
+      },
+      {
+        "level": "h2",
+        "title_template": "Artigos Recomendados",
+        "content_mode": "dynamic",
+        "specific_content_hint": "Incluir 3-5 artigos relacionados com links internos.",
+        "min_paragraphs": 1,
+        "max_paragraphs": 3,
+        "min_words": 80,
+        "max_words": 180,
+        "source_fields": [
+          "web_research.topics"
+        ],
+        "prompt_id": null,
+        "position": 12
+      }
+    ],
+    "internal_links_count": 5,
+    "external_links_count": 3,
+    "active": true,
+    "created_at": {
+      "$date": "2026-02-13T06:20:38.152Z"
+    },
+    "updated_at": {
+      "$date": "2026-02-13T06:20:38.152Z"
+    }
+  }
+]

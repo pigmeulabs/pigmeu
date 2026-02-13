@@ -77,7 +77,7 @@ class ArticleStructurer:
         user_prompt = prompt_doc.get("user_prompt", "")
         user_prompt = user_prompt.replace("{{title}}", book_data.get("title", ""))
         user_prompt = user_prompt.replace("{{author}}", book_data.get("author", ""))
-        user_prompt = user_prompt.replace("{{data}}", json.dumps(book_data, ensure_ascii=True))
+        user_prompt = user_prompt.replace("{{data}}", json.dumps(book_data, ensure_ascii=True, default=str))
         user_prompt = build_user_prompt_with_output_format(user_prompt, prompt_doc)
 
         model_id = str(config.get("model_id") or prompt_doc.get("model_id", MODEL_MISTRAL_LARGE_LATEST))
@@ -371,7 +371,7 @@ class ArticleStructurer:
                 if value not in unique_values:
                     unique_values.append(value)
             rendered = "; ".join(unique_values[:3])
-            lines.append(f"- **{field_name}**: {rendered}")
+            lines.append(f"{field_name}: {rendered}")
 
         return lines
 
@@ -832,6 +832,35 @@ class ArticleStructurer:
 
         return f"{prompt}\n\n" + "\n".join(constraints)
 
+    def _sanitize_section_output(self, content: str) -> str:
+        text = str(content or "").strip()
+        if not text:
+            return ""
+
+        cleaned_lines: List[str] = []
+        artifact_patterns = [
+            re.compile(r"^\s*[-*]?\s*\*\*[^*]+\*\*\s*:\s*.*$", flags=re.I),
+            re.compile(r"^\s*(specific guidance|orienta[çc][aã]o espec[íi]fica)\s*:\s*.*$", flags=re.I),
+            re.compile(r"^\s*(dados de origem|source data|input data)\s*:?\s*$", flags=re.I),
+            re.compile(r"^\s*(title|author|metadata|summaries|web_research|consolidated_bibliographic)\.[^:]+:\s*.*$", flags=re.I),
+            re.compile(r"^\s*(title|author|metadata|summaries|web_research|consolidated_bibliographic)\s*:\s*\{.*\}\s*$", flags=re.I),
+        ]
+
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                cleaned_lines.append("")
+                continue
+            if "{{" in line and "}}" in line:
+                continue
+            if any(pattern.match(line) for pattern in artifact_patterns):
+                continue
+            cleaned_lines.append(raw_line)
+
+        cleaned = "\n".join(cleaned_lines).strip()
+        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+        return cleaned
+
     async def _generate_schema_section(
         self,
         book_data: Dict[str, Any],
@@ -851,8 +880,13 @@ class ArticleStructurer:
             "Escreva o corpo de uma seção para artigo de book review em português (pt-BR).\n"
             "Use linguagem concisa, factual e estruturada."
         )
+        prompt_purpose = str((prompt_doc or {}).get("purpose") or "").strip().lower()
+        # Prompts de artigo completo não devem ser reutilizados como prompt de seção.
+        use_prompt_template = bool(prompt_doc) and prompt_purpose not in {"article"}
         system_prompt = str((prompt_doc or {}).get("system_prompt") or default_prompt)
-        user_template = str((prompt_doc or {}).get("user_prompt") or "")
+        if not use_prompt_template:
+            system_prompt = default_prompt
+        user_template = str((prompt_doc or {}).get("user_prompt") or "") if use_prompt_template else ""
         user_prompt = self._build_section_user_prompt(
             prompt_template=user_template,
             book_data=book_data,
@@ -866,7 +900,17 @@ class ArticleStructurer:
             internal_links_target=internal_links_target,
             external_links_target=external_links_target,
         )
-        user_prompt = build_user_prompt_with_output_format(user_prompt, prompt_doc)
+        prompt_doc_for_output = (
+            prompt_doc
+            if use_prompt_template
+            else {
+                "expected_output_format": (
+                    "Retorne somente o corpo textual da seção em markdown.\n"
+                    "Não inclua headings (#/##/###), metadados técnicos, labels de campos, JSON ou blocos de código."
+                )
+            }
+        )
+        user_prompt = build_user_prompt_with_output_format(user_prompt, prompt_doc_for_output)
 
         llm_params = self._resolve_llm_parameters(llm_config=llm_config, prompt_doc=prompt_doc)
         section_text = ""
@@ -885,6 +929,7 @@ class ArticleStructurer:
             section_text = ""
 
         section_text = self._strip_section_heading(section_text, str(section_item.get("rendered_title") or ""))
+        section_text = self._sanitize_section_output(section_text)
         if not section_text:
             section_text = self._make_paragraph(
                 subject=str(section_item.get("rendered_title") or "Section"),
@@ -994,8 +1039,6 @@ class ArticleStructurer:
             prompt_id = str(item.get("prompt_id") or "").strip()
             if prompt_id:
                 prompt_doc = schema_prompts.get(prompt_id)
-            if not prompt_doc:
-                prompt_doc = default_prompt_doc
 
             section_body = await self._generate_schema_section(
                 book_data=book_data,
@@ -1149,13 +1192,6 @@ class ArticleStructurer:
             min_words, max_words = self._section_word_bounds(item, level)
             sections.append(f"{heading} {rendered_title}")
             sections.append(self._make_paragraph(rendered_title, context, min_words=min_words, max_words=max_words))
-
-            source_lines = self._schema_reference_lines(item, book_data)
-            if source_lines:
-                sections.extend(source_lines)
-
-            if str(item.get("content_mode", "")).lower() == "specific" and item.get("specific_content_hint"):
-                sections.append(f"- **Orientação específica**: {item.get('specific_content_hint')}")
 
             if "detalhes" in rendered_title.lower() or "book details" in rendered_title.lower():
                 sections.append(f"- **Título:** {title}")
@@ -1935,6 +1971,9 @@ class ArticleStructurer:
         llm_config: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Generate and validate article with retries."""
+        best_article: Optional[str] = None
+        best_errors_count: Optional[int] = None
+
         for attempt in range(max_retries):
             topics = await self.extract_topics(book_data, llm_config=llm_config)
             article_content = await self.structure_article(
@@ -1953,5 +1992,13 @@ class ArticleStructurer:
 
             if validation["is_valid"]:
                 return article_content
+
+            current_errors = len(validation.get("errors", []))
+            if article_content.strip() and (best_errors_count is None or current_errors < best_errors_count):
+                best_article = article_content
+                best_errors_count = current_errors
+
+        if best_article and best_article.strip():
+            return best_article
 
         raise ValueError(f"Failed to generate valid article after {max_retries} attempts")

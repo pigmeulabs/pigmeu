@@ -1,0 +1,102 @@
+[
+  {
+    "_id": {
+      "$oid": "698c593989b2ce7a4ea4b0d7"
+    },
+    "name": "Book Metadata Extractor",
+    "created_at": {
+      "$date": "2026-02-11T10:26:01.107Z"
+    },
+    "max_tokens": 500,
+    "model_id": "mistral-large-latest",
+    "purpose": "Extract structured metadata from Amazon product pages",
+    "schema_example": "{\n  \"title_original\": \"string\",\n  \"authors\": [\"string\"],\n  \"theme\": \"string\",\n  \"lang_original\": \"string\",\n  \"lang_edition\": \"string\",\n  \"edition\": \"string\",\n  \"pub_date\": \"string\",\n  \"publisher\": \"string\",\n  \"isbn\": \"string\",\n  \"pages\": 0,\n  \"price_physical\": 0.0,\n  \"price_ebook\": 0.0,\n  \"amazon_rating\": 0.0\n}",
+    "system_prompt": "You are an expert data extractor specializing in book metadata from e-commerce platforms.\nYour task is to extract structured information from book pages with high accuracy.\nAlways return valid JSON with the exact schema provided.",
+    "temperature": 0.3,
+    "user_prompt": "Extract the following metadata from the given book information:\n- title_original: Original title if different from current listing\n- authors: List of author names\n- theme: Main theme or category\n- lang_original: Language the book was originally written in\n- lang_edition: Language of this edition\n- edition: Edition number or description\n- pub_date: Publication date (YYYY-MM-DD format if possible)\n- publisher: Publisher name\n- isbn: ISBN number\n- pages: Number of pages\n- price_physical: Price of physical book\n- price_ebook: Price of ebook version\n- amazon_rating: Rating on Amazon (0-5 scale)\n\nReturn ONLY valid JSON with these keys. Use null for missing information.",
+    "provider": "mistral",
+    "updated_at": {
+      "$date": "2026-02-13T08:11:33.431Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "698c593989b2ce7a4ea4b0d8"
+    },
+    "name": "Context Generator - Technical Books",
+    "created_at": {
+      "$date": "2026-02-11T10:26:01.107Z"
+    },
+    "max_tokens": 1500,
+    "model_id": "llama-3.3-70b-versatile",
+    "purpose": "Generate structured markdown context and knowledge base for technical books",
+    "schema_example": null,
+    "system_prompt": "You are an expert technical writer and knowledge architect.\nYour role is to synthesize information about technical books into a well-structured,\nmarkdown-formatted knowledge base that will serve as context for AI models.\n\nCreate a comprehensive, organized, and searchable knowledge base in markdown format.",
+    "temperature": 0.7,
+    "user_prompt": "Based on the book information and extracted data provided below, create a structured markdown\nknowledge base for \"{{title}}\" by {{author}}.\n\nStructure it with:\n1. Overview section: Main topic and relevance\n2. Key Concepts: Main ideas and frameworks discussed\n3. Technical Details: Specific technologies, tools, or methodologies\n4. Target Audience: Who should read this\n5. Prerequisites: What readers should know before reading\n6. Main Takeaways: Key learnings\n\nMake it comprehensive yet readable, using headings, lists, and clear hierarchy.\nData to incorporate:\n{{data}}",
+    "provider": "groq",
+    "updated_at": {
+      "$date": "2026-02-13T08:11:33.431Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "698c593989b2ce7a4ea4b0d9"
+    },
+    "name": "Topic Extractor for Books",
+    "created_at": {
+      "$date": "2026-02-11T10:26:01.107Z"
+    },
+    "max_tokens": 600,
+    "model_id": "mistral-large-latest",
+    "purpose": "Extract 3 main topics/themes from a book to structure article sections",
+    "schema_example": "{\n  \"topics\": [\n    {\n      \"name\": \"Distributed Systems\",\n      \"description\": \"Principles and challenges of building reliable systems across multiple machines\",\n      \"subtopics\": [\"Replication\", \"Consistency models\", \"Fault tolerance\"]\n    }\n  ]\n}",
+    "system_prompt": "You are a book analyst expert at identifying core topics and themes.\nExtract the 3 most important, distinct topics that a reader should understand about this book.\nThese topics will form the thematic sections of a review article.",
+    "temperature": 0.5,
+    "user_prompt": "Analyze the book \"{{title}}\" by {{author}} and extract exactly 3 main topics/themes.\n\nFor each topic provide:\n1. Topic name (2-4 words)\n2. Brief description (1-2 sentences)\n3. Key subtopics (3-5 bullet points)\n\nFormat as JSON:\n{\n  \"topics\": [\n    {\n      \"name\": \"Topic Name\",\n      \"description\": \"What this topic covers\",\n      \"subtopics\": [\"subtopic1\", \"subtopic2\", \"subtopic3\"]\n    }\n  ]\n}\n\nBook info:\n{{data}}",
+    "provider": "mistral",
+    "updated_at": {
+      "$date": "2026-02-13T08:11:33.431Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "698c593989b2ce7a4ea4b0da"
+    },
+    "name": "SEO-Optimized Article Writer",
+    "created_at": {
+      "$date": "2026-02-11T10:26:01.107Z"
+    },
+    "max_tokens": 2500,
+    "model_id": "mistral-large-latest",
+    "purpose": "Generate a complete, SEO-optimized technical book review article with proper structure",
+    "schema_example": null,
+    "system_prompt": "You are an expert SEO-optimized technical writer and book reviewer.\nYour goal is to write comprehensive, well-structured articles that rank well in search engines\nwhile being genuinely helpful to readers.\n\nKey guidelines:\n- Use natural language with target keywords incorporated smoothly\n- Structure: 1 H1 title, 8 H2 sections (3 thematic + 5 fixed), 1 H2 can have 2-4 H3 subsections\n- Total length: 800-1333 words\n- Paragraphs: 3-6 sentences (50-100 words each)\n- Every section must provide real value\n- Include practical examples when relevant",
+    "temperature": 0.7,
+    "user_prompt": "Write a comprehensive SEO-optimized review article for \"{{title}}\" by {{author}}.\n\nStructure:\n1. [Dynamic Theme 1]: {{topic1}} (H2, 200+ words)\n   - Include 2-3 H3 subsections with specific details\n2. [Dynamic Theme 2]: {{topic2}} (H2, 200+ words)\n   - Include 2-3 H3 subsections with specific details\n3. [Dynamic Theme 3]: {{topic3}} (H2, 200+ words)\n   - Include 2-3 H3 subsections with specific details\n4. Introduction to Book Topic (H2, 150+ words)\n5. Context and Motivation (H2, 150+ words)\n6. Impact and Applicability (H2, 150+ words)\n7. Book Details (H2, 100+ words): metadata, ISBN, links\n8. About the Author (H2, 100+ words): biography, notable works\n9. Download & Links (H2, 50+ words): purchase/reading links\n10. Related Subjects (H2, 80+ words): topical links for SEO\n\nTotal word count: 800-1333 words\n\nContext and metadata:\n{{context}}",
+    "provider": "mistral",
+    "updated_at": {
+      "$date": "2026-02-13T08:11:33.431Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "698c593989b2ce7a4ea4b0db"
+    },
+    "name": "Link Summarizer",
+    "created_at": {
+      "$date": "2026-02-11T10:26:01.107Z"
+    },
+    "max_tokens": 400,
+    "model_id": "llama-3.3-70b-versatile",
+    "purpose": "Summarize external web page content into structured markdown for knowledge base",
+    "schema_example": null,
+    "system_prompt": "You are an expert at reading web content and extracting key information.\nSummarize the provided web page content into a structured markdown summary.\nFocus on extracting facts, data, insights, and topic keywords relevant to the context.",
+    "temperature": 0.5,
+    "user_prompt": "Summarize this web page about \"{{title}}\":\n\n[Content]:\n{{content}}\n\nCreate a markdown summary with:\n1. Main idea (2-3 sentences)\n2. Key points (5-7 bullets)\n3. Relevant topics/keywords (comma-separated list)\n4. Credibility/source quality (one sentence)\n\nKeep it concise but informative (150-250 words).",
+    "provider": "groq",
+    "updated_at": {
+      "$date": "2026-02-13T08:11:33.431Z"
+    }
+  }
+]
