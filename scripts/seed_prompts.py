@@ -9,6 +9,12 @@ import asyncio
 from datetime import datetime
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from src.db.connection import get_database
+from src.workers.ai_defaults import (
+    MODEL_GROQ_LLAMA_3_3_70B,
+    MODEL_MISTRAL_LARGE_LATEST,
+    PROVIDER_GROQ,
+    PROVIDER_MISTRAL,
+)
 
 
 INITIAL_PROMPTS = [
@@ -16,7 +22,7 @@ INITIAL_PROMPTS = [
         "name": "Book Metadata Extractor",
         "purpose": "Extract structured metadata from Amazon product pages",
         "category": "Book Review",
-        "provider": "openai",
+        "provider": PROVIDER_MISTRAL,
         "short_description": "Extracts normalized metadata from book pages.",
         "system_prompt": """You are a high-precision bibliographic extraction assistant optimized for API inference.
 Use only the evidence present in the input.
@@ -35,7 +41,7 @@ Rules:
 4. Preserve identifiers exactly (ISBN, ASIN, URLs).
 5. Respond in Portuguese (pt-BR), except identifiers/URLs.
 6. Return only the JSON object.""",
-        "model_id": "gpt-3.5-turbo",
+        "model_id": MODEL_MISTRAL_LARGE_LATEST,
         "temperature": 0.3,
         "max_tokens": 500,
         "expected_output_format": """{
@@ -74,7 +80,7 @@ Rules:
         "name": "Context Generator - Technical Books",
         "purpose": "context",
         "category": "Book Review",
-        "provider": "openai",
+        "provider": PROVIDER_GROQ,
         "short_description": "Gera contexto editorial estruturado para artigo de book review.",
         "system_prompt": """You are a senior editorial researcher for technical book reviews.
 Your job is to transform noisy evidence into a reliable context package for article generation.
@@ -94,7 +100,7 @@ Requirements:
 6. Mention missing evidence clearly.
 7. Respond in Portuguese (pt-BR).
 8. Follow the expected output format exactly.""",
-        "model_id": "gpt-3.5-turbo",
+        "model_id": MODEL_GROQ_LLAMA_3_3_70B,
         "temperature": 0.5,
         "max_tokens": 1800,
         "expected_output_format": """Markdown template:
@@ -193,7 +199,7 @@ Requirements:
         "name": "Topic Extractor for Books",
         "purpose": "topic_extraction",
         "category": "Book Review",
-        "provider": "openai",
+        "provider": PROVIDER_MISTRAL,
         "short_description": "Extrai 3 eixos editoriais para estruturar H2/H3 do artigo.",
         "system_prompt": """You are a book analysis assistant specialized in editorial topic planning.
 Identify exactly 3 complementary themes that can structure a high-quality review article.
@@ -213,7 +219,7 @@ Rules:
 5. Prioritize topics that answer real reader intent.
 6. Respond in Portuguese (pt-BR).
 7. Return only the JSON object.""",
-        "model_id": "gpt-3.5-turbo",
+        "model_id": MODEL_MISTRAL_LARGE_LATEST,
         "temperature": 0.5,
         "max_tokens": 750,
         "expected_output_format": """{
@@ -266,7 +272,7 @@ Rules:
         "name": "SEO-Optimized Article Writer",
         "purpose": "article",
         "category": "Book Review",
-        "provider": "openai",
+        "provider": PROVIDER_MISTRAL,
         "short_description": "Gera artigo final de book review em estilo editorial técnico, em pt-BR.",
         "system_prompt": """You are a senior Brazilian technical columnist writing book reviews for a professional audience.
 Your style must be analytical, practical, and trustworthy.
@@ -292,7 +298,7 @@ Requirements:
 6. Ensure SEO intent: semantic relevance, related terms, and useful headings.
 7. Respect schema constraints when provided (order, word targets, links).
 8. Follow the expected output format exactly.""",
-        "model_id": "gpt-3.5-turbo",
+        "model_id": MODEL_MISTRAL_LARGE_LATEST,
         "temperature": 0.55,
         "max_tokens": 3200,
         "expected_output_format": """Markdown template:
@@ -363,7 +369,7 @@ Arquitetura limpa não é apenas organização de código: é uma forma de reduz
         "name": "Link Summarizer",
         "purpose": "Summarize external web page content into structured markdown for knowledge base",
         "category": "Book Review",
-        "provider": "openai",
+        "provider": PROVIDER_GROQ,
         "short_description": "Summarizes external pages using deterministic markdown sections.",
         "system_prompt": """You are a web-content summarization assistant optimized for API workflows.
 Extract key facts, insights, and relevance for editorial usage.
@@ -380,7 +386,7 @@ Requirements:
 3. Explicitly indicate credibility level.
 4. Respond in Portuguese (pt-BR).
 5. Follow the expected output format exactly.""",
-        "model_id": "gpt-3.5-turbo",
+        "model_id": MODEL_GROQ_LLAMA_3_3_70B,
         "temperature": 0.5,
         "max_tokens": 400,
         "expected_output_format": """Markdown template:
@@ -419,7 +425,7 @@ media — apresenta exemplos úteis, mas sem referências metodológicas detalha
         "name": "Book Review - Additional Link Bibliographic Extractor",
         "purpose": "book_review_link_bibliography_extract",
         "category": "Book Review",
-        "provider": "mistral",
+        "provider": PROVIDER_MISTRAL,
         "short_description": "Extrai metadados bibliográficos de conteúdo de links adicionais.",
         "system_prompt": """You are a bibliographic extraction engine optimized for API usage.
 Extract only factual information about a book and its author from the provided text.
@@ -441,7 +447,7 @@ Rules:
 4. Respond in Portuguese (pt-BR), except URLs and identifiers.
 5. Return only the JSON object.
 6. Follow the expected output format exactly.""",
-        "model_id": "mistral-large-latest",
+        "model_id": MODEL_MISTRAL_LARGE_LATEST,
         "temperature": 0.1,
         "max_tokens": 900,
         "expected_output_format": """{
@@ -486,7 +492,7 @@ Rules:
         "name": "Book Review - Additional Link Summary",
         "purpose": "book_review_link_summary",
         "category": "Book Review",
-        "provider": "groq",
+        "provider": PROVIDER_GROQ,
         "short_description": "Resume links adicionais com foco em livro, autor e valor editorial.",
         "system_prompt": """You summarize web content for editorial book research.
 Focus strictly on insights about the book and author.
@@ -509,7 +515,7 @@ Rules:
 4. Respond in Portuguese (pt-BR).
 5. Return only the JSON object.
 6. Follow the expected output format exactly.""",
-        "model_id": "llama-3.3-70b-versatile",
+        "model_id": MODEL_GROQ_LLAMA_3_3_70B,
         "temperature": 0.3,
         "max_tokens": 900,
         "expected_output_format": """{
@@ -532,7 +538,7 @@ Rules:
         "name": "Book Review - Web Research",
         "purpose": "book_review_web_research",
         "category": "Book Review",
-        "provider": "groq",
+        "provider": PROVIDER_GROQ,
         "short_description": "Pesquisa web sobre temas, contexto e intenção editorial do livro/autor.",
         "system_prompt": """You are a literary research analyst.
 Synthesize topics, themes, and context about the book and author from web source excerpts.
@@ -556,7 +562,7 @@ Rules:
 5. Respond in Portuguese (pt-BR).
 6. Return only the JSON object.
 7. Follow the expected output format exactly.""",
-        "model_id": "llama-3.3-70b-versatile",
+        "model_id": MODEL_GROQ_LLAMA_3_3_70B,
         "temperature": 0.25,
         "max_tokens": 1100,
         "expected_output_format": """{

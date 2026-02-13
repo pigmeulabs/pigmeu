@@ -9,6 +9,7 @@ from urllib.parse import quote_plus, urlparse
 import httpx
 from bs4 import BeautifulSoup
 
+from src.workers.ai_defaults import DEFAULT_MODEL_ID
 from src.workers.llm_client import LLMClient
 from src.workers.prompt_builder import build_user_prompt_with_output_format
 
@@ -124,7 +125,7 @@ class LinkFinder:
                     '  "credibility": "media"\n'
                     "}"
                 ),
-                "model_id": "gpt-4o-mini",
+                "model_id": DEFAULT_MODEL_ID,
                 "temperature": 0.4,
                 "max_tokens": 500,
             }
@@ -141,7 +142,7 @@ class LinkFinder:
             summary = await llm.generate_with_retry(
                 system_prompt=prompt_doc.get("system_prompt", ""),
                 user_prompt=user_prompt,
-                model_id=prompt_doc.get("model_id", "gpt-4o-mini"),
+                model_id=prompt_doc.get("model_id", DEFAULT_MODEL_ID),
                 temperature=prompt_doc.get("temperature", 0.4),
                 max_tokens=prompt_doc.get("max_tokens", 500),
             )

@@ -92,11 +92,11 @@ const WP_CREDENTIAL_STORAGE_KEY = 'pigmeu.bookReview.wordpressCredentialId';
 const DEFAULT_WORDPRESS_CREDENTIAL_URL = 'https://analisederequisitos.com.br';
 const SIDEBAR_STORAGE_KEY = 'pigmeu.sidebar.collapsed';
 const PROMPT_DEFAULT_CATEGORY = 'Book Review';
+const PROMPT_DEFAULT_PROVIDER = 'groq';
+const PROMPT_DEFAULT_MODEL = 'llama-3.3-70b-versatile';
 const PROMPT_PROVIDER_OPTIONS = [
-  { value: 'openai', label: 'OpenAI' },
   { value: 'groq', label: 'Groq' },
   { value: 'mistral', label: 'Mistral' },
-  { value: 'claude', label: 'Claude' },
 ];
 
 function safeStringify(value, fallback = '[unserializable object]') {
@@ -2269,7 +2269,7 @@ function applyPromptProviderOptions(items = []) {
   const values = new Set(PROMPT_PROVIDER_OPTIONS.map((item) => item.value));
   (Array.isArray(items) ? items : []).forEach((item) => {
     const provider = String(item?.provider || '').trim().toLowerCase();
-    if (provider) values.add(provider);
+    if (provider && values.has(provider)) values.add(provider);
   });
 
   const providerOptions = Array.from(values)
@@ -2277,11 +2277,11 @@ function applyPromptProviderOptions(items = []) {
     .map((value) => ({ value, label: getPromptProviderLabel(value) }));
 
   if (promptProviderInput) {
-    const selected = String(promptProviderInput.value || '').trim().toLowerCase() || 'openai';
+    const selected = String(promptProviderInput.value || '').trim().toLowerCase() || PROMPT_DEFAULT_PROVIDER;
     promptProviderInput.innerHTML = providerOptions
       .map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`)
       .join('');
-    promptProviderInput.value = values.has(selected) ? selected : 'openai';
+    promptProviderInput.value = values.has(selected) ? selected : PROMPT_DEFAULT_PROVIDER;
   }
 
   if (promptFilterProviderInput) {
@@ -2332,11 +2332,11 @@ function resetPromptForm() {
   const model = promptForm.querySelector('#prompt-model');
   const temperature = promptForm.querySelector('#prompt-temp');
   const maxTokens = promptForm.querySelector('#prompt-tokens');
-  if (model) model.value = 'gpt-4o-mini';
+  if (model) model.value = PROMPT_DEFAULT_MODEL;
   if (temperature) temperature.value = '0.7';
   if (maxTokens) maxTokens.value = '800';
   if (promptCategoryInput) promptCategoryInput.value = PROMPT_DEFAULT_CATEGORY;
-  if (promptProviderInput) promptProviderInput.value = 'openai';
+  if (promptProviderInput) promptProviderInput.value = PROMPT_DEFAULT_PROVIDER;
   if (promptFormResult) {
     promptFormResult.className = 'form-result';
     promptFormResult.textContent = '';
@@ -2371,21 +2371,15 @@ function openPromptModal(prompt = null) {
     promptForm.querySelector('#prompt-purpose').value = prompt.purpose || '';
     if (promptCategoryInput) promptCategoryInput.value = prompt.category || PROMPT_DEFAULT_CATEGORY;
     if (promptProviderInput) {
-      const providerValue = String(prompt.provider || 'openai').toLowerCase();
+      const providerValue = String(prompt.provider || PROMPT_DEFAULT_PROVIDER).toLowerCase();
       const hasOption = Array.from(promptProviderInput.options).some((option) => option.value === providerValue);
-      if (!hasOption && providerValue) {
-        const option = document.createElement('option');
-        option.value = providerValue;
-        option.textContent = getPromptProviderLabel(providerValue);
-        promptProviderInput.appendChild(option);
-      }
-      promptProviderInput.value = providerValue;
+      promptProviderInput.value = hasOption ? providerValue : PROMPT_DEFAULT_PROVIDER;
     }
     promptForm.querySelector('#prompt-short').value = prompt.short_description || '';
     promptForm.querySelector('#prompt-system').value = prompt.system_prompt || '';
     promptForm.querySelector('#prompt-user').value = prompt.user_prompt || '';
     promptForm.querySelector('#prompt-output-format').value = prompt.expected_output_format || prompt.schema_example || '';
-    promptForm.querySelector('#prompt-model').value = prompt.model_id || 'gpt-4o-mini';
+    promptForm.querySelector('#prompt-model').value = prompt.model_id || PROMPT_DEFAULT_MODEL;
     promptForm.querySelector('#prompt-temp').value = String(prompt.temperature ?? 0.7);
     promptForm.querySelector('#prompt-tokens').value = String(prompt.max_tokens ?? 800);
     promptForm.querySelector('input[name="active"]').checked = !!prompt.active;
@@ -2412,7 +2406,7 @@ function renderPromptItem(prompt) {
     <div>
       <strong>${escapeHtml(prompt.name || '-')}</strong>
       <div class="text-muted small">${escapeHtml(prompt.short_description || prompt.purpose || '')}</div>
-      <div class="text-muted small">Category: ${escapeHtml(prompt.category || PROMPT_DEFAULT_CATEGORY)} | Provider: ${escapeHtml(getPromptProviderLabel(prompt.provider || 'openai'))}</div>
+      <div class="text-muted small">Category: ${escapeHtml(prompt.category || PROMPT_DEFAULT_CATEGORY)} | Provider: ${escapeHtml(getPromptProviderLabel(prompt.provider || PROMPT_DEFAULT_PROVIDER))}</div>
       <div class="text-muted small">Purpose: ${escapeHtml(prompt.purpose || '-')} | Model: ${escapeHtml(prompt.model_id || '-')}</div>
       <div class="text-muted small">${escapeHtml(shortSystem)}${(prompt.system_prompt || '').length > 160 ? '...' : ''}</div>
       <span class="task-status ${active ? 'status-success' : 'status-warning'}">${active ? 'Active' : 'Inactive'}</span>
@@ -2541,12 +2535,12 @@ if (promptForm) {
       name: promptForm.querySelector('#prompt-name')?.value.trim(),
       purpose: promptForm.querySelector('#prompt-purpose')?.value.trim(),
       category: promptForm.querySelector('#prompt-category')?.value.trim() || PROMPT_DEFAULT_CATEGORY,
-      provider: promptForm.querySelector('#prompt-provider')?.value.trim().toLowerCase() || 'openai',
+      provider: promptForm.querySelector('#prompt-provider')?.value.trim().toLowerCase() || PROMPT_DEFAULT_PROVIDER,
       short_description: promptForm.querySelector('#prompt-short')?.value.trim() || undefined,
       system_prompt: promptForm.querySelector('#prompt-system')?.value,
       user_prompt: promptForm.querySelector('#prompt-user')?.value,
       expected_output_format: promptForm.querySelector('#prompt-output-format')?.value.trim() || undefined,
-      model_id: promptForm.querySelector('#prompt-model')?.value.trim() || 'gpt-4o-mini',
+      model_id: promptForm.querySelector('#prompt-model')?.value.trim() || PROMPT_DEFAULT_MODEL,
       temperature: parseFloat(promptForm.querySelector('#prompt-temp')?.value || '0.7'),
       max_tokens: parseInt(promptForm.querySelector('#prompt-tokens')?.value || '800', 10),
       active: !!promptForm.querySelector('input[name="active"]')?.checked,
@@ -2622,7 +2616,7 @@ async function fetchPromptOptions(force = false) {
     name: String(item.name || ''),
     purpose: String(item.purpose || ''),
     category: String(item.category || PROMPT_DEFAULT_CATEGORY),
-    provider: String(item.provider || 'openai').toLowerCase(),
+    provider: String(item.provider || PROMPT_DEFAULT_PROVIDER).toLowerCase(),
     active: item.active !== false,
   }));
   return cachedPromptOptions;

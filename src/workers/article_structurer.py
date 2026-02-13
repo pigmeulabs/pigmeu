@@ -11,6 +11,11 @@ from urllib.parse import quote_plus, urlparse
 from bson import ObjectId
 
 from src.db.connection import get_database
+from src.workers.ai_defaults import (
+    BOOK_REVIEW_ARTICLE_MODEL_ID,
+    DEFAULT_MODEL_ID,
+    MODEL_MISTRAL_LARGE_LATEST,
+)
 from src.workers.llm_client import LLMClient
 from src.workers.prompt_builder import build_user_prompt_with_output_format
 
@@ -75,7 +80,7 @@ class ArticleStructurer:
         user_prompt = user_prompt.replace("{{data}}", json.dumps(book_data, ensure_ascii=True))
         user_prompt = build_user_prompt_with_output_format(user_prompt, prompt_doc)
 
-        model_id = str(config.get("model_id") or prompt_doc.get("model_id", "gpt-4o-mini"))
+        model_id = str(config.get("model_id") or prompt_doc.get("model_id", MODEL_MISTRAL_LARGE_LATEST))
         try:
             temperature = float(config.get("temperature") if config.get("temperature") is not None else prompt_doc.get("temperature", 0.5))
         except (TypeError, ValueError):
@@ -734,7 +739,7 @@ class ArticleStructurer:
         default_temperature: float = 0.7,
         default_max_tokens: int = 1200,
     ) -> Dict[str, Any]:
-        model_id = str(llm_config.get("model_id") or (prompt_doc or {}).get("model_id") or "gpt-4o-mini")
+        model_id = str(llm_config.get("model_id") or (prompt_doc or {}).get("model_id") or DEFAULT_MODEL_ID)
         try:
             temperature = float(
                 llm_config.get("temperature")
@@ -1228,7 +1233,7 @@ class ArticleStructurer:
 
             user_prompt = build_user_prompt_with_output_format(user_prompt, article_prompt)
 
-            model_id = str(config.get("model_id") or article_prompt.get("model_id", "gpt-4o-mini"))
+            model_id = str(config.get("model_id") or article_prompt.get("model_id", BOOK_REVIEW_ARTICLE_MODEL_ID))
             try:
                 temperature = float(config.get("temperature") if config.get("temperature") is not None else article_prompt.get("temperature", 0.7))
             except (TypeError, ValueError):

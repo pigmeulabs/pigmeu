@@ -24,6 +24,15 @@ from src.db.repositories import (
 from src.models.enums import SubmissionStatus
 from src.scrapers.amazon import AmazonScraper
 from src.scrapers.link_finder import LinkFinder
+from src.workers.ai_defaults import (
+    BOOK_REVIEW_CONTEXT_MODEL_ID,
+    BOOK_REVIEW_CONTEXT_PROVIDER,
+    DEFAULT_PROVIDER,
+    MODEL_GROQ_LLAMA_3_3_70B,
+    MODEL_MISTRAL_LARGE_LATEST,
+    PROVIDER_GROQ,
+    PROVIDER_MISTRAL,
+)
 from src.workers.llm_client import LLMClient
 from src.workers.prompt_builder import build_user_prompt_with_output_format
 
@@ -36,7 +45,7 @@ LINK_BIBLIO_PROMPT = {
     "category": "Book Review",
     "provider": "mistral",
     "short_description": "Extrai metadados bibliograficos de conteudo de links adicionais.",
-    "model_id": "mistral-large-latest",
+    "model_id": MODEL_MISTRAL_LARGE_LATEST,
     "temperature": 0.1,
     "max_tokens": 900,
     "system_prompt": (
@@ -105,7 +114,7 @@ LINK_SUMMARY_PROMPT = {
     "category": "Book Review",
     "provider": "groq",
     "short_description": "Resume links adicionais com foco em livro e autor.",
-    "model_id": "llama-3.3-70b-versatile",
+    "model_id": MODEL_GROQ_LLAMA_3_3_70B,
     "temperature": 0.3,
     "max_tokens": 900,
     "system_prompt": (
@@ -153,7 +162,7 @@ WEB_RESEARCH_PROMPT = {
     "category": "Book Review",
     "provider": "groq",
     "short_description": "Pesquisa web sobre temas, contexto e intenção editorial do livro/autor.",
-    "model_id": "llama-3.3-70b-versatile",
+    "model_id": MODEL_GROQ_LLAMA_3_3_70B,
     "temperature": 0.25,
     "max_tokens": 1100,
     "system_prompt": (
@@ -409,7 +418,7 @@ async def _ensure_prompt(prompt_repo: PromptRepository, prompt_data: Dict[str, A
         "name": prompt_data["name"],
         "purpose": prompt_data["purpose"],
         "category": prompt_data.get("category", "Book Review"),
-        "provider": str(prompt_data.get("provider") or "openai").strip().lower() or "openai",
+        "provider": str(prompt_data.get("provider") or DEFAULT_PROVIDER).strip().lower() or DEFAULT_PROVIDER,
         "short_description": prompt_data["short_description"],
         "system_prompt": prompt_data["system_prompt"],
         "user_prompt": prompt_data["user_prompt"],
@@ -475,10 +484,10 @@ async def _run_link_bibliographic_extraction(
     response = await llm.generate_with_retry(
         system_prompt=str(prompt_doc.get("system_prompt", "")),
         user_prompt=user_prompt,
-        model_id=str(prompt_doc.get("model_id", "mistral-large-latest")),
+        model_id=str(prompt_doc.get("model_id", MODEL_MISTRAL_LARGE_LATEST)),
         temperature=float(prompt_doc.get("temperature", 0.1)),
         max_tokens=int(prompt_doc.get("max_tokens", 900)),
-        provider="mistral",
+        provider=PROVIDER_MISTRAL,
         api_key=api_key,
         allow_fallback=False,
     )
@@ -513,10 +522,10 @@ async def _run_link_summary(
         response = await llm.generate_with_retry(
             system_prompt=str(prompt_doc.get("system_prompt", "")),
             user_prompt=user_prompt,
-            model_id=str(prompt_doc.get("model_id", "llama-3.3-70b-versatile")),
+            model_id=str(prompt_doc.get("model_id", MODEL_GROQ_LLAMA_3_3_70B)),
             temperature=float(prompt_doc.get("temperature", 0.3)),
             max_tokens=int(prompt_doc.get("max_tokens", 900)),
-            provider="groq",
+            provider=PROVIDER_GROQ,
             api_key=api_key,
             allow_fallback=False,
         )
@@ -571,10 +580,10 @@ async def _run_web_research(
         response = await llm.generate_with_retry(
             system_prompt=str(prompt_doc.get("system_prompt", "")),
             user_prompt=user_prompt,
-            model_id=str(prompt_doc.get("model_id", "llama-3.3-70b-versatile")),
+            model_id=str(prompt_doc.get("model_id", MODEL_GROQ_LLAMA_3_3_70B)),
             temperature=float(prompt_doc.get("temperature", 0.25)),
             max_tokens=int(prompt_doc.get("max_tokens", 1100)),
-            provider="groq",
+            provider=PROVIDER_GROQ,
             api_key=api_key,
             allow_fallback=False,
         )
@@ -1033,9 +1042,10 @@ def generate_context_task(self, submission_id: str) -> Dict[str, Any]:
                 llm_markdown = await llm.generate_with_retry(
                     system_prompt=prompt.get("system_prompt", ""),
                     user_prompt=user_prompt,
-                    model_id=prompt.get("model_id", "gpt-4o-mini"),
+                    model_id=prompt.get("model_id", BOOK_REVIEW_CONTEXT_MODEL_ID),
                     temperature=prompt.get("temperature", 0.7),
                     max_tokens=prompt.get("max_tokens", 1200),
+                    provider=prompt.get("provider", BOOK_REVIEW_CONTEXT_PROVIDER),
                 )
             except Exception as exc:
                 logger.warning("LLM context generation failed: %s", exc)

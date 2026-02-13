@@ -22,6 +22,12 @@ from src.db.repositories import (
 )
 from src.models.enums import SubmissionStatus
 from src.workers.article_structurer import ArticleStructurer
+from src.workers.ai_defaults import (
+    BOOK_REVIEW_ARTICLE_MODEL_ID,
+    BOOK_REVIEW_ARTICLE_PROVIDER,
+    DEFAULT_PROVIDER,
+    infer_provider_from_model,
+)
 
 logger = logging.getLogger(__name__)
 BOOK_REVIEW_PIPELINE_ID = "book_review_v2"
@@ -51,12 +57,7 @@ def _safe_int(value: Any, default: int) -> int:
 
 
 def _infer_provider(model_id: str) -> str:
-    model = str(model_id or "").lower()
-    if "mistral" in model or "mixtral" in model:
-        return "mistral"
-    if "llama" in model or "groq" in model:
-        return "groq"
-    return "openai"
+    return infer_provider_from_model(model_id=model_id, fallback=DEFAULT_PROVIDER)
 
 
 async def _resolve_article_generation_config(
@@ -69,8 +70,8 @@ async def _resolve_article_generation_config(
         "pipeline_id": str(pipeline_id or BOOK_REVIEW_PIPELINE_ID),
         "step_id": ARTICLE_GENERATION_STEP_ID,
         "delay_seconds": 0,
-        "provider": "openai",
-        "model_id": "gpt-4o-mini",
+        "provider": BOOK_REVIEW_ARTICLE_PROVIDER,
+        "model_id": BOOK_REVIEW_ARTICLE_MODEL_ID,
         "temperature": 0.7,
         "max_tokens": 2500,
         "prompt_id": None,

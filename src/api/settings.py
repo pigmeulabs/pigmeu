@@ -34,6 +34,15 @@ from src.models.schemas import (
     ContentSchemaUpdate,
     ContentSchemaResponse,
 )
+from src.workers.ai_defaults import (
+    BOOK_REVIEW_ARTICLE_MODEL_ID,
+    BOOK_REVIEW_ARTICLE_PROVIDER,
+    BOOK_REVIEW_CONTEXT_MODEL_ID,
+    BOOK_REVIEW_CONTEXT_PROVIDER,
+    DEFAULT_PROVIDER,
+    MODEL_GROQ_LLAMA_3_3_70B,
+    MODEL_MISTRAL_LARGE_LATEST,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +79,7 @@ BOOK_REVIEW_PIPELINE_TEMPLATE: Dict[str, Any] = {
             "delay_seconds": 0,
             "ai": {
                 "provider": "mistral",
-                "model_id": "mistral-large-latest",
+                "model_id": MODEL_MISTRAL_LARGE_LATEST,
                 "credential_id": None,
                 "prompt_id": None,
                 "default_credential_name": "Mistral A",
@@ -86,7 +95,7 @@ BOOK_REVIEW_PIPELINE_TEMPLATE: Dict[str, Any] = {
             "delay_seconds": 0,
             "ai": {
                 "provider": "groq",
-                "model_id": "llama-3.3-70b-versatile",
+                "model_id": MODEL_GROQ_LLAMA_3_3_70B,
                 "credential_id": None,
                 "prompt_id": None,
                 "default_credential_name": "GROC A",
@@ -110,7 +119,7 @@ BOOK_REVIEW_PIPELINE_TEMPLATE: Dict[str, Any] = {
             "delay_seconds": 0,
             "ai": {
                 "provider": "groq",
-                "model_id": "llama-3.3-70b-versatile",
+                "model_id": MODEL_GROQ_LLAMA_3_3_70B,
                 "credential_id": None,
                 "prompt_id": None,
                 "default_credential_name": "GROC A",
@@ -125,11 +134,11 @@ BOOK_REVIEW_PIPELINE_TEMPLATE: Dict[str, Any] = {
             "uses_ai": True,
             "delay_seconds": 0,
             "ai": {
-                "provider": "openai",
-                "model_id": "gpt-4o-mini",
+                "provider": BOOK_REVIEW_CONTEXT_PROVIDER,
+                "model_id": BOOK_REVIEW_CONTEXT_MODEL_ID,
                 "credential_id": None,
                 "prompt_id": None,
-                "default_credential_name": None,
+                "default_credential_name": "GROC A",
                 "default_prompt_purpose": "context",
             },
         },
@@ -141,11 +150,11 @@ BOOK_REVIEW_PIPELINE_TEMPLATE: Dict[str, Any] = {
             "uses_ai": True,
             "delay_seconds": 0,
             "ai": {
-                "provider": "openai",
-                "model_id": "gpt-4o-mini",
+                "provider": BOOK_REVIEW_ARTICLE_PROVIDER,
+                "model_id": BOOK_REVIEW_ARTICLE_MODEL_ID,
                 "credential_id": None,
                 "prompt_id": None,
-                "default_credential_name": None,
+                "default_credential_name": "Mistral A",
                 "default_prompt_purpose": "article",
             },
         },
@@ -176,7 +185,7 @@ LINKS_CONTENT_PIPELINE_TEMPLATE: Dict[str, Any] = {
             "delay_seconds": 0,
             "ai": {
                 "provider": "groq",
-                "model_id": "llama-3.3-70b-versatile",
+                "model_id": MODEL_GROQ_LLAMA_3_3_70B,
                 "credential_id": None,
                 "prompt_id": None,
                 "default_credential_name": "GROC A",
@@ -192,7 +201,7 @@ LINKS_CONTENT_PIPELINE_TEMPLATE: Dict[str, Any] = {
             "delay_seconds": 0,
             "ai": {
                 "provider": "mistral",
-                "model_id": "mistral-large-latest",
+                "model_id": MODEL_MISTRAL_LARGE_LATEST,
                 "credential_id": None,
                 "prompt_id": None,
                 "default_credential_name": "Mistral A",
@@ -215,8 +224,8 @@ LINKS_CONTENT_PIPELINE_TEMPLATE: Dict[str, Any] = {
             "uses_ai": True,
             "delay_seconds": 0,
             "ai": {
-                "provider": "groq",
-                "model_id": "llama-3.3-70b-versatile",
+                "provider": BOOK_REVIEW_CONTEXT_PROVIDER,
+                "model_id": BOOK_REVIEW_CONTEXT_MODEL_ID,
                 "credential_id": None,
                 "prompt_id": None,
                 "default_credential_name": "GROC A",
@@ -231,11 +240,11 @@ LINKS_CONTENT_PIPELINE_TEMPLATE: Dict[str, Any] = {
             "uses_ai": True,
             "delay_seconds": 0,
             "ai": {
-                "provider": "openai",
-                "model_id": "gpt-4o-mini",
+                "provider": BOOK_REVIEW_ARTICLE_PROVIDER,
+                "model_id": BOOK_REVIEW_ARTICLE_MODEL_ID,
                 "credential_id": None,
                 "prompt_id": None,
-                "default_credential_name": None,
+                "default_credential_name": "Mistral A",
                 "default_prompt_purpose": "article",
             },
         },
@@ -320,12 +329,10 @@ def _prompt_option(doc: Dict[str, Any]) -> Dict[str, Any]:
     if not provider:
         if model_id.startswith("mistral"):
             provider = "mistral"
-        elif model_id.startswith("claude"):
-            provider = "claude"
         elif model_id.startswith("llama") or model_id.startswith("mixtral"):
             provider = "groq"
         else:
-            provider = "openai"
+            provider = DEFAULT_PROVIDER
 
     return {
         "id": str(doc.get("_id")),
@@ -344,12 +351,10 @@ def _prompt_response(doc: Dict[str, Any]) -> PromptResponse:
     if not provider:
         if model_id.startswith("mistral"):
             provider = "mistral"
-        elif model_id.startswith("claude"):
-            provider = "claude"
         elif model_id.startswith("llama") or model_id.startswith("mixtral"):
             provider = "groq"
         else:
-            provider = "openai"
+            provider = DEFAULT_PROVIDER
 
     return PromptResponse(
         id=str(doc.get("_id")),
@@ -1350,7 +1355,7 @@ async def get_prompt(prompt_id: str, repo=Depends(get_prompt_repo)):
 async def create_prompt(payload: PromptCreate, repo=Depends(get_prompt_repo)):
     try:
         data = payload.model_dump()
-        data["provider"] = str(data.get("provider") or "openai").strip().lower() or "openai"
+        data["provider"] = str(data.get("provider") or DEFAULT_PROVIDER).strip().lower() or DEFAULT_PROVIDER
         data["category"] = str(data.get("category") or "Book Review").strip() or "Book Review"
         pid = await repo.create(data)
         doc = await repo.get_by_id(pid)
@@ -1371,7 +1376,7 @@ async def update_prompt(prompt_id: str, payload: PromptUpdate, repo=Depends(get_
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No fields to update")
 
     if "provider" in update_data:
-        update_data["provider"] = str(update_data.get("provider") or "openai").strip().lower() or "openai"
+        update_data["provider"] = str(update_data.get("provider") or DEFAULT_PROVIDER).strip().lower() or DEFAULT_PROVIDER
     if "category" in update_data:
         update_data["category"] = str(update_data.get("category") or "Book Review").strip() or "Book Review"
 
