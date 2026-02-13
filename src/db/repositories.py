@@ -620,3 +620,34 @@ class PromptRepository:
             return False
         result = await self.collection.delete_one({"_id": object_id})
         return result.deleted_count > 0
+
+
+class PipelineConfigRepository:
+    """Repository for pipeline configuration documents."""
+
+    def __init__(self, db: AsyncIOMotorDatabase):
+        self.collection = db["pipeline_configs"]
+
+    async def list_all(self) -> List[Dict[str, Any]]:
+        return await self.collection.find({}).sort("updated_at", DESCENDING).to_list(length=None)
+
+    async def get_by_pipeline_id(self, pipeline_id: str) -> Optional[Dict[str, Any]]:
+        return await self.collection.find_one({"pipeline_id": str(pipeline_id)})
+
+    async def create_or_update(self, pipeline_id: str, payload: Dict[str, Any]) -> str:
+        existing = await self.get_by_pipeline_id(pipeline_id)
+        now = utcnow()
+
+        doc = {
+            **payload,
+            "pipeline_id": str(pipeline_id),
+            "updated_at": now,
+        }
+
+        if existing:
+            await self.collection.update_one({"_id": existing["_id"]}, {"$set": doc})
+            return str(existing["_id"])
+
+        doc["created_at"] = now
+        result = await self.collection.insert_one(doc)
+        return str(result.inserted_id)

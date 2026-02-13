@@ -13,6 +13,7 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Body, status
+from bson import ObjectId
 
 from src.api.dependencies import (
     get_submission_repo,
@@ -322,6 +323,19 @@ def _serialize_submission(doc: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _sanitize_for_response(value: Any) -> Any:
+    """Recursively convert non-JSON-native values (e.g., ObjectId) for API responses."""
+    if isinstance(value, ObjectId):
+        return str(value)
+    if isinstance(value, dict):
+        return {key: _sanitize_for_response(val) for key, val in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_for_response(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_sanitize_for_response(item) for item in value)
+    return value
+
+
 @router.get("/health", tags=["Health"])
 async def tasks_health():
     return {"status": "ok", "endpoint": "tasks"}
@@ -411,7 +425,7 @@ async def get_task(
         for item in summaries
     ]
 
-    return {
+    response = {
         "submission": _serialize_submission(submission),
         "book": book_data,
         "summaries": summaries_data,
@@ -420,6 +434,7 @@ async def get_task(
         "draft": draft,
         "progress": _build_progress(submission.get("status")),
     }
+    return _sanitize_for_response(response)
 
 
 @router.post("/{submission_id}/generate_context", status_code=status.HTTP_202_ACCEPTED, summary="Enqueue context generation")

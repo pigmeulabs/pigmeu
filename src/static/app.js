@@ -1,9 +1,6 @@
 const navLinks = document.querySelectorAll('.nav-link');
 const sections = document.querySelectorAll('.section');
 
-const modal = document.getElementById('task-modal');
-const modalContent = modal ? modal.querySelector('.modal-content') : null;
-
 const submitForm = document.getElementById('submit-form');
 const submitResult = document.getElementById('submit-result');
 
@@ -31,6 +28,15 @@ const taskEditResult = document.getElementById('task-edit-result');
 const taskEditCancelBtn = document.getElementById('task-edit-cancel-btn');
 const taskEditRunImmediatelyInput = document.getElementById('task-edit-run-immediately');
 const taskEditScheduleInput = document.getElementById('task-edit-schedule-execution');
+const taskDetailsContent = document.getElementById('task-details-content');
+const backToTasksBtn = document.getElementById('back-to-tasks-btn');
+
+const pipelinesGrid = document.getElementById('pipelines-grid');
+const pipelinesResult = document.getElementById('pipelines-result');
+const pipelineDetailsTitle = document.getElementById('pipeline-details-title');
+const pipelineDetailsContent = document.getElementById('pipeline-details-content');
+const layoutEl = document.querySelector('.layout');
+const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
 
 const refreshBtn = document.getElementById('refresh-tasks');
 const prevBtn = document.getElementById('prev-page');
@@ -52,6 +58,9 @@ let currentTaskDetails = null;
 let searchDebounceTimer = null;
 let editingCredentialId = null;
 let editingPromptId = null;
+let currentPipelineId = null;
+let currentPipelineDetails = null;
+const SIDEBAR_STORAGE_KEY = 'pigmeu.sidebar.collapsed';
 
 function safeStringify(value, fallback = '[unserializable object]') {
   try {
@@ -127,19 +136,19 @@ function statusClass(status) {
 
 function statusLabel(status) {
   const map = {
-    pending_scrape: 'Pendente scrape',
+    pending_scrape: 'Pending Scrape',
     scraping_amazon: 'Scraping Amazon',
     scraping_goodreads: 'Scraping Goodreads',
-    context_generation: 'Gerando contexto',
-    context_generated: 'Contexto gerado',
-    pending_context: 'Pendente contexto',
-    pending_article: 'Pendente artigo',
-    article_generated: 'Artigo gerado',
-    ready_for_review: 'Pronto revisão',
-    approved: 'Aprovado',
-    published: 'Publicado',
-    scraping_failed: 'Falha scrape',
-    failed: 'Falha',
+    context_generation: 'Generating Context',
+    context_generated: 'Context Generated',
+    pending_context: 'Pending Context',
+    pending_article: 'Pending Article',
+    article_generated: 'Article Generated',
+    ready_for_review: 'Ready for Review',
+    approved: 'Approved',
+    published: 'Published',
+    scraping_failed: 'Scrape Failed',
+    failed: 'Failed',
   };
   return map[status] || status || '-';
 }
@@ -150,25 +159,66 @@ function showSection(sectionId) {
 
   navLinks.forEach((link) => {
     link.classList.remove('active');
-    if (link.dataset.section === sectionId) link.classList.add('active');
+    if (link.dataset.section === sectionId) {
+      link.classList.add('active');
+      return;
+    }
+    if (sectionId === 'task-details-section' && link.dataset.section === 'tasks-section') {
+      link.classList.add('active');
+    }
   });
 
   const titleMap = {
     'analytics-section': 'Analytics',
     'tasks-section': 'Tasks Dashboard',
+    'task-details-section': 'Task Details',
     'content-copilot-section': 'Content Copilot',
     'submit-section': 'Book Review',
     'articles-section': 'Articles',
-    'social-media-section': 'Social media',
+    'social-media-section': 'Social Media',
     'seo-tools-section': 'SEO Tools',
     'settings-section': 'Settings',
     'credentials-section': 'Credentials',
     'content-schemas-section': 'Content Schemas',
     'prompts-section': 'Prompts',
+    'pipelines-section': 'Pipelines',
     'logout-section': 'Logout',
   };
   const title = document.querySelector('.header-left h1');
   if (title) title.textContent = titleMap[sectionId] || 'Dashboard';
+
+  if (sectionId === 'pipelines-section') {
+    fetchPipelines();
+  }
+}
+
+function applySidebarCollapsedState(collapsed) {
+  if (!layoutEl) return;
+  layoutEl.classList.toggle('sidebar-collapsed', !!collapsed);
+
+  if (sidebarToggleBtn) {
+    sidebarToggleBtn.classList.toggle('is-collapsed', !!collapsed);
+    sidebarToggleBtn.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+    const actionLabel = collapsed ? 'Expand Sidebar' : 'Collapse Sidebar';
+    sidebarToggleBtn.setAttribute('aria-label', actionLabel);
+    sidebarToggleBtn.setAttribute('title', collapsed ? 'Expand Sidebar' : 'Collapse Sidebar');
+  }
+}
+
+function readSidebarCollapsedState() {
+  try {
+    return localStorage.getItem(SIDEBAR_STORAGE_KEY) === '1';
+  } catch (_) {
+    return false;
+  }
+}
+
+function persistSidebarCollapsedState(collapsed) {
+  try {
+    localStorage.setItem(SIDEBAR_STORAGE_KEY, collapsed ? '1' : '0');
+  } catch (_) {
+    // no-op
+  }
 }
 
 navLinks.forEach((link) => {
@@ -178,31 +228,9 @@ navLinks.forEach((link) => {
   });
 });
 
-function openModal() {
-  if (modal) modal.classList.add('active');
-}
-
-function closeModal() {
-  if (modal) modal.classList.remove('active');
-  currentTaskId = null;
-  currentTaskDetails = null;
-}
-
-if (modal) {
-  modal.addEventListener('click', (event) => {
-    const isClose = event.target.classList?.contains('modal-close');
-    if (event.target === modal || isClose) {
-      closeModal();
-    }
-  });
-}
-
-function setModalContent(innerHtml) {
-  if (!modalContent) return;
-  modalContent.innerHTML = `
-    <button class="modal-close" type="button" aria-label="Fechar">&times;</button>
-    ${innerHtml}
-  `;
+function setTaskDetailsContent(innerHtml) {
+  if (!taskDetailsContent) return;
+  taskDetailsContent.innerHTML = innerHtml;
 }
 
 function bindOverlayModalClose(modalEl, onClose) {
@@ -288,11 +316,11 @@ function markdownToHtml(markdown) {
 async function fetchStats() {
   if (!statsStrip) return;
 
-  statsStrip.innerHTML = '<div class="loading">Carregando métricas...</div>';
+  statsStrip.innerHTML = '<div class="loading">Loading metrics...</div>';
   try {
     const response = await fetch('/stats');
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(parseApiError(data, 'Falha ao carregar métricas'));
+    if (!response.ok) throw new Error(parseApiError(data, 'Failed to load metrics'));
 
     const byStatus = data.by_status || {};
     const published = Number(byStatus.published || 0);
@@ -307,30 +335,30 @@ async function fetchStats() {
         <span class="stat-value">${total}</span>
       </div>
       <div class="stat-card">
-        <span class="stat-label">Publicados</span>
+        <span class="stat-label">Published</span>
         <span class="stat-value">${published}</span>
       </div>
       <div class="stat-card">
-        <span class="stat-label">Prontos p/ revisão</span>
+        <span class="stat-label">Ready for Review</span>
         <span class="stat-value">${review}</span>
       </div>
       <div class="stat-card">
-        <span class="stat-label">Falhas</span>
+        <span class="stat-label">Failed</span>
         <span class="stat-value">${failed}</span>
       </div>
       <div class="stat-card">
-        <span class="stat-label">Taxa de sucesso</span>
+        <span class="stat-label">Success Rate</span>
         <span class="stat-value">${(successRate * 100).toFixed(1)}%</span>
       </div>
     `;
   } catch (err) {
-    statsStrip.innerHTML = `<div class="loading">Erro: ${escapeHtml(normalizeError(err, 'Falha ao carregar métricas'))}</div>`;
+    statsStrip.innerHTML = `<div class="loading">Error: ${escapeHtml(normalizeError(err, 'Failed to load metrics'))}</div>`;
   }
 }
 
 function renderTaskCard(task) {
   const card = document.createElement('div');
-  card.className = 'task-card';
+  card.className = 'task-card clickable-card';
 
   const amazonUrl = task.amazon_url ? escapeHtml(task.amazon_url) : '-';
   const shortUrl = amazonUrl.length > 64 ? `${amazonUrl.slice(0, 64)}...` : amazonUrl;
@@ -343,7 +371,7 @@ function renderTaskCard(task) {
       <span class="task-status ${statusClass(task.status)}">${escapeHtml(statusLabel(task.status))}</span>
       <div class="task-card-meta-actions">
         <span class="text-muted small">${formatDate(task.updated_at)}</span>
-        <button type="button" class="btn btn-danger btn-xs task-card-delete-btn">Deletar</button>
+        <button type="button" class="btn btn-danger btn-xs task-card-delete-btn">Delete</button>
       </div>
     </div>
   `;
@@ -352,14 +380,14 @@ function renderTaskCard(task) {
   if (deleteBtn) {
     deleteBtn.addEventListener('click', async (event) => {
       event.stopPropagation();
-      const confirmed = confirm(`Excluir tarefa "${task.title || task.id}"?`);
+      const confirmed = confirm(`Delete task "${task.title || task.id}"?`);
       if (!confirmed) return;
 
       try {
         deleteBtn.disabled = true;
         await deleteTaskById(task.id);
       } catch (err) {
-        alert(normalizeError(err, 'Falha ao excluir tarefa'));
+        alert(normalizeError(err, 'Failed to delete task'));
       } finally {
         deleteBtn.disabled = false;
       }
@@ -368,7 +396,7 @@ function renderTaskCard(task) {
 
   card.addEventListener('click', () => {
     currentTaskId = task.id;
-    openModal();
+    showSection('task-details-section');
     fetchTaskDetails(task.id);
   });
 
@@ -378,7 +406,7 @@ function renderTaskCard(task) {
 async function fetchTasks() {
   if (!tasksGrid) return;
 
-  tasksGrid.innerHTML = '<div class="loading">Carregando tarefas...</div>';
+  tasksGrid.innerHTML = '<div class="loading">Loading tasks...</div>';
 
   const params = new URLSearchParams({
     skip: String(skip),
@@ -394,11 +422,11 @@ async function fetchTasks() {
   try {
     const response = await fetch(`/tasks?${params.toString()}`);
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(parseApiError(data, 'Falha ao carregar tarefas'));
+    if (!response.ok) throw new Error(parseApiError(data, 'Failed to load tasks'));
 
     tasksGrid.innerHTML = '';
     if (!Array.isArray(data.tasks) || data.tasks.length === 0) {
-      tasksGrid.innerHTML = '<div class="loading">Nenhuma tarefa encontrada</div>';
+      tasksGrid.innerHTML = '<div class="loading">No tasks found</div>';
     } else {
       data.tasks.forEach((task) => tasksGrid.appendChild(renderTaskCard(task)));
     }
@@ -408,11 +436,11 @@ async function fetchTasks() {
     const start = total > 0 ? Number(data.skip || 0) + 1 : 0;
     const end = total > 0 ? Number(data.skip || 0) + count : 0;
 
-    if (paginationInfo) paginationInfo.textContent = `Mostrando ${start}-${end} de ${total}`;
+    if (paginationInfo) paginationInfo.textContent = `Showing ${start}-${end} of ${total}`;
     if (prevBtn) prevBtn.disabled = Number(data.skip || 0) <= 0;
     if (nextBtn) nextBtn.disabled = Number(data.skip || 0) + count >= total;
   } catch (err) {
-    tasksGrid.innerHTML = `<div class="loading">Erro: ${escapeHtml(normalizeError(err, 'Falha ao carregar tarefas'))}</div>`;
+    tasksGrid.innerHTML = `<div class="loading">Error: ${escapeHtml(normalizeError(err, 'Failed to load tasks'))}</div>`;
     if (paginationInfo) paginationInfo.textContent = '';
   }
 }
@@ -431,58 +459,58 @@ function getStepReprocessConfig(taskId, stage) {
   const map = {
     amazon_scrape: makeStepRetryConfig(
       'amazon_scrape',
-      'Reprocessamento de scraping Amazon enfileirado com sucesso.',
-      'Falha ao reprocessar scraping Amazon'
+      'Amazon scraping retry queued successfully.',
+      'Failed to retry Amazon scraping'
     ),
     additional_links_scrape: makeStepRetryConfig(
       'additional_links_scrape',
-      'Reprocessamento de links adicionais enfileirado com sucesso.',
-      'Falha ao reprocessar links adicionais'
+      'Additional links scraping retry queued successfully.',
+      'Failed to retry additional links scraping'
     ),
     summarize_additional_links: makeStepRetryConfig(
       'summarize_additional_links',
-      'Reprocessamento de resumo de links enfileirado com sucesso.',
-      'Falha ao reprocessar resumo de links'
+      'Links summary retry queued successfully.',
+      'Failed to retry links summary'
     ),
     consolidate_book_data: makeStepRetryConfig(
       'consolidate_book_data',
-      'Reprocessamento de consolidação enfileirado com sucesso.',
-      'Falha ao reprocessar consolidação de dados'
+      'Consolidation retry queued successfully.',
+      'Failed to retry data consolidation'
     ),
     internet_research: makeStepRetryConfig(
       'internet_research',
-      'Reprocessamento de pesquisa web enfileirado com sucesso.',
-      'Falha ao reprocessar pesquisa web'
+      'Web research retry queued successfully.',
+      'Failed to retry web research'
     ),
     context_generation: makeStepRetryConfig(
       'context_generation',
-      'Reprocessamento de contexto enfileirado com sucesso.',
-      'Falha ao reprocessar geração de contexto'
+      'Context generation retry queued successfully.',
+      'Failed to retry context generation'
     ),
     article_generation: makeStepRetryConfig(
       'article_generation',
-      'Reprocessamento de artigo enfileirado com sucesso.',
-      'Falha ao reprocessar geração de artigo'
+      'Article generation retry queued successfully.',
+      'Failed to retry article generation'
     ),
     pending_scrape: makeStepRetryConfig(
       'pending_scrape',
-      'Reprocessamento de scraping enfileirado com sucesso.',
-      'Falha ao reprocessar step de scraping'
+      'Scraping retry queued successfully.',
+      'Failed to retry scraping step'
     ),
     pending_context: makeStepRetryConfig(
       'pending_context',
-      'Reprocessamento de contexto enfileirado com sucesso.',
-      'Falha ao reprocessar step de contexto'
+      'Context generation retry queued successfully.',
+      'Failed to retry context step'
     ),
     pending_article: makeStepRetryConfig(
       'pending_article',
-      'Reprocessamento de artigo enfileirado com sucesso.',
-      'Falha ao reprocessar step de artigo'
+      'Article generation retry queued successfully.',
+      'Failed to retry article step'
     ),
     ready_for_review: makeStepRetryConfig(
       'ready_for_review',
-      'Regeneração do artigo enfileirada com sucesso.',
-      'Falha ao regenerar artigo'
+      'Article regeneration queued successfully.',
+      'Failed to regenerate article'
     ),
   };
 
@@ -504,7 +532,7 @@ function getStepContent(taskData, stage) {
     const extracted = book?.extracted;
     if (extracted && Object.keys(extracted).length > 0) {
       return {
-        title: 'Conteúdo do step de scraping',
+        title: 'Scraping Step Content',
         type: 'json',
         value: JSON.stringify(extracted, null, 2),
       };
@@ -520,7 +548,7 @@ function getStepContent(taskData, stage) {
       link_bibliographic_candidates: extracted.link_bibliographic_candidates || [],
     };
     return {
-      title: 'Conteúdo do step de links adicionais',
+      title: 'Additional Links Step Content',
       type: 'json',
       value: JSON.stringify(content, null, 2),
     };
@@ -529,7 +557,7 @@ function getStepContent(taskData, stage) {
   if (stage === 'summarize_additional_links') {
     if (!summaries.length) return null;
     return {
-      title: 'Conteúdo do step de resumo de links',
+      title: 'Links Summary Step Content',
       type: 'json',
       value: JSON.stringify(summaries, null, 2),
     };
@@ -539,7 +567,7 @@ function getStepContent(taskData, stage) {
     const consolidated = extracted.consolidated_bibliographic;
     if (!consolidated) return null;
     return {
-      title: 'Conteúdo do step de consolidação',
+      title: 'Consolidation Step Content',
       type: 'json',
       value: JSON.stringify(consolidated, null, 2),
     };
@@ -549,7 +577,7 @@ function getStepContent(taskData, stage) {
     const research = extracted.web_research;
     if (!research) return null;
     return {
-      title: 'Conteúdo do step de pesquisa web',
+      title: 'Web Research Step Content',
       type: 'json',
       value: JSON.stringify(research, null, 2),
     };
@@ -559,7 +587,7 @@ function getStepContent(taskData, stage) {
     const markdown = kb?.markdown_content;
     if (markdown) {
       return {
-        title: 'Conteúdo do step de contexto',
+        title: 'Context Step Content',
         type: 'markdown',
         value: String(markdown),
       };
@@ -571,7 +599,7 @@ function getStepContent(taskData, stage) {
     const content = draft?.content || article?.content;
     if (content) {
       return {
-        title: 'Conteúdo do step de artigo',
+        title: 'Article Step Content',
         type: 'markdown',
         value: String(content),
       };
@@ -605,7 +633,7 @@ function mapCurrentTaskStep(submission = {}) {
     consolidate_book_data: 'consolidate_book_data',
     internet_research: 'internet_research',
     context_generation: 'context_generation',
-    pending_context: 'context_generation',
+    pending_context: 'additional_links_scrape',
     context_generated: 'context_generation',
     article_generation: 'article_generation',
     pending_article: 'article_generation',
@@ -668,7 +696,7 @@ function buildTaskFlowSteps(taskData) {
   }
 
   const isFailed = ['scraping_failed', 'failed'].includes(status);
-  if (isFailed && currentStep && states[currentStep] !== 'processed') {
+  if (isFailed && currentStep) {
     states[currentStep] = 'failed';
   } else if (currentStep && states[currentStep] === 'to_do') {
     states[currentStep] = 'current';
@@ -688,7 +716,7 @@ function getFlowStatusLabel(state) {
 }
 
 function renderTaskProgressTimeline(flowSteps = []) {
-  if (!Array.isArray(flowSteps) || flowSteps.length === 0) return '<p class="text-muted">Sem progresso disponível</p>';
+  if (!Array.isArray(flowSteps) || flowSteps.length === 0) return '<p class="text-muted">No progress available</p>';
 
   return `
     <div class="task-progress-panel">
@@ -719,7 +747,7 @@ function renderTaskProgressTimeline(flowSteps = []) {
 }
 
 function renderStepDetails(flowSteps = [], taskData = null) {
-  if (!Array.isArray(flowSteps) || flowSteps.length === 0) return '<p class="text-muted">Sem steps disponíveis.</p>';
+  if (!Array.isArray(flowSteps) || flowSteps.length === 0) return '<p class="text-muted">No steps available.</p>';
 
   return `
     <div class="steps-details-panel">
@@ -727,9 +755,9 @@ function renderStepDetails(flowSteps = [], taskData = null) {
         .map((step) => {
           const statusText = getFlowStatusLabel(step.state);
           const reprocessConfig = getStepReprocessConfig(currentTaskId, step.id);
-          const canReprocess = !!reprocessConfig && step.state !== 'to_do';
-          const hasContent = !!getStepContent(taskData, step.id);
-          const canView = hasContent && step.state !== 'to_do';
+          const actionableState = step.state === 'processed' || step.state === 'failed';
+          const canReprocess = !!reprocessConfig && actionableState;
+          const canView = actionableState;
 
           return `
             <div class="steps-row">
@@ -758,10 +786,10 @@ function renderTaskDetails(data) {
   return `
     <div class="task-details-container">
       <div class="task-details-top">
-        <h3 class="task-details-title">Task details: Book Review</h3>
+        <h3 class="task-details-title">Task Details: Book Review</h3>
         <div class="task-details-top-actions">
-          <button id="action-edit-task" class="btn btn-primary" type="button">Alterar tarefa</button>
-          <button id="action-delete-task" class="btn btn-danger" type="button">Deletar</button>
+          <button id="action-edit-task" class="btn btn-primary" type="button">Edit Task</button>
+          <button id="action-delete-task" class="btn btn-danger" type="button">Delete</button>
         </div>
       </div>
       <div class="task-details-divider"></div>
@@ -780,7 +808,7 @@ function renderTaskDetails(data) {
       <h4 class="task-section-title">Task Progress</h4>
       ${renderTaskProgressTimeline(flowSteps)}
 
-      <h4 class="task-section-title">Steps details</h4>
+      <h4 class="task-section-title">Step Details</h4>
       ${renderStepDetails(flowSteps, data)}
       <div id="task-action-result" class="form-result" style="display:none"></div>
       <div id="step-content-viewer" class="details-block" style="display:none"></div>
@@ -805,7 +833,7 @@ async function executeTaskAction(url, method = 'POST', payload = null) {
   });
 
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(parseApiError(data, 'Ação falhou'));
+  if (!response.ok) throw new Error(parseApiError(data, 'Action failed'));
   return data;
 }
 
@@ -813,7 +841,10 @@ async function deleteTaskById(taskId, { closeDetails = false } = {}) {
   await executeTaskAction(`/tasks/${taskId}`, 'DELETE');
 
   if (closeDetails) {
-    closeModal();
+    showSection('tasks-section');
+    currentTaskId = null;
+    currentTaskDetails = null;
+    setTaskDetailsContent('<p class="text-muted">Select a task to view details.</p>');
   }
 
   await Promise.all([fetchTasks(), fetchStats()]);
@@ -834,14 +865,14 @@ function wireTaskActions(taskId, taskData) {
 
   if (deleteTaskBtn) {
     deleteTaskBtn.addEventListener('click', async () => {
-      const confirmed = confirm(`Excluir tarefa "${taskData?.submission?.title || taskId}"?`);
+      const confirmed = confirm(`Delete task "${taskData?.submission?.title || taskId}"?`);
       if (!confirmed) return;
 
       try {
         deleteTaskBtn.disabled = true;
         await deleteTaskById(taskId, { closeDetails: true });
       } catch (err) {
-        showTaskActionResult(normalizeError(err, 'Falha ao excluir tarefa'), true);
+        showTaskActionResult(normalizeError(err, 'Failed to delete task'), true);
       } finally {
         deleteTaskBtn.disabled = false;
       }
@@ -853,7 +884,7 @@ function wireTaskActions(taskId, taskData) {
       const stage = button.dataset.stepStage;
       const config = getStepReprocessConfig(taskId, stage);
       if (!config) {
-        showTaskActionResult('Step sem ação de reprocessamento disponível.', true);
+        showTaskActionResult('No retry action available for this step.', true);
         return;
       }
 
@@ -886,8 +917,8 @@ function wireTaskActions(taskId, taskData) {
 
       if (!content) {
         stepContentViewer.innerHTML = `
-          <h5>Conteúdo do step</h5>
-          <p class="text-muted">Conteúdo ainda não disponível para este step.</p>
+          <h5>Step Content</h5>
+          <p class="text-muted">Content is not available for this step yet.</p>
         `;
         return;
       }
@@ -924,15 +955,15 @@ function wireTaskActions(taskId, taskData) {
     saveDraftBtn.addEventListener('click', async () => {
       const content = contentEditor.value.trim();
       if (!content) {
-        showTaskActionResult('Conteúdo do draft é obrigatório.', true);
+        showTaskActionResult('Draft content is required.', true);
         return;
       }
 
       try {
         await executeTaskAction(`/tasks/${taskId}/draft_article`, 'POST', { content });
-        showTaskActionResult('Draft salvo com sucesso.');
+        showTaskActionResult('Draft saved successfully.');
       } catch (err) {
-        showTaskActionResult(normalizeError(err, 'Falha ao salvar draft'), true);
+        showTaskActionResult(normalizeError(err, 'Failed to save draft'), true);
       }
     });
   }
@@ -942,7 +973,7 @@ function wireTaskActions(taskId, taskData) {
       const content = contentEditor.value.trim();
       const title = titleInput.value.trim();
       if (!content || !title) {
-        showTaskActionResult('Título e conteúdo do artigo são obrigatórios.', true);
+        showTaskActionResult('Article title and content are required.', true);
         return;
       }
 
@@ -951,27 +982,27 @@ function wireTaskActions(taskId, taskData) {
           title,
           content,
         });
-        showTaskActionResult('Artigo atualizado com sucesso.');
+        showTaskActionResult('Article updated successfully.');
       } catch (err) {
-        showTaskActionResult(normalizeError(err, 'Falha ao atualizar artigo'), true);
+        showTaskActionResult(normalizeError(err, 'Failed to update article'), true);
       }
     });
   }
 }
 
 async function fetchTaskDetails(taskId) {
-  setModalContent('<div style="padding:20px">Carregando detalhes...</div>');
+  setTaskDetailsContent('<div class="loading">Loading details...</div>');
 
   try {
     const response = await fetch(`/tasks/${taskId}`);
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(parseApiError(data, 'Falha ao carregar detalhes da tarefa'));
+    if (!response.ok) throw new Error(parseApiError(data, 'Failed to load task details'));
 
     currentTaskDetails = data;
-    setModalContent(renderTaskDetails(data));
+    setTaskDetailsContent(renderTaskDetails(data));
     wireTaskActions(taskId, data);
   } catch (err) {
-    setModalContent(`<div style="padding:20px" class="form-result error">Erro: ${escapeHtml(normalizeError(err, 'Falha ao carregar detalhes'))}</div>`);
+    setTaskDetailsContent(`<div class="form-result error">Error: ${escapeHtml(normalizeError(err, 'Failed to load details'))}</div>`);
   }
 }
 
@@ -1021,7 +1052,7 @@ function closeTaskEditModal() {
 }
 
 function collectTaskEditPayload() {
-  if (!taskEditForm) throw new Error('Formulário de edição indisponível.');
+  if (!taskEditForm) throw new Error('Edit form is unavailable.');
 
   const title = taskEditForm.querySelector('#task-edit-title')?.value.trim();
   const authorName = taskEditForm.querySelector('#task-edit-author-name')?.value.trim();
@@ -1037,7 +1068,7 @@ function collectTaskEditPayload() {
   const userApprovalRequired = !!taskEditForm.querySelector('#task-edit-user-approval-required')?.checked;
 
   if (!title || !authorName || !amazonUrl) {
-    throw new Error('Preencha os campos obrigatórios: título, autor e link Amazon.');
+    throw new Error('Fill required fields: title, author, and Amazon link.');
   }
 
   if (!/^https?:\/\//i.test(amazonUrl)) {
@@ -1053,7 +1084,7 @@ function collectTaskEditPayload() {
   }
 
   if (!runImmediately && !scheduleExecution) {
-    throw new Error('Informe data/hora de agendamento quando Run immediately estiver desmarcado.');
+    throw new Error('Informe data/hora of agendamento quando Run immediately estiver desmarcado.');
   }
 
   const otherLinks = otherLinksRaw
@@ -1063,7 +1094,7 @@ function collectTaskEditPayload() {
 
   const invalid = otherLinks.find((url) => !/^https?:\/\//i.test(url));
   if (invalid) {
-    throw new Error(`Link adicional inválido: ${invalid}`);
+    throw new Error(`Invalid additional link: ${invalid}`);
   }
 
   return {
@@ -1125,7 +1156,7 @@ function collectSubmitPayload() {
   const userApprovalRequired = !!document.getElementById('user_approval_required')?.checked;
 
   if (!title || !authorName || !amazonUrl) {
-    throw new Error('Preencha os campos obrigatórios: título, autor e link Amazon.');
+    throw new Error('Fill required fields: title, author, and Amazon link.');
   }
 
   if (!/^https?:\/\//i.test(amazonUrl)) {
@@ -1133,7 +1164,7 @@ function collectSubmitPayload() {
   }
 
   if (!runImmediately && !scheduleExecution) {
-    throw new Error('Informe data/hora de agendamento quando Run immediately estiver desmarcado.');
+    throw new Error('Informe data/hora of agendamento quando Run immediately estiver desmarcado.');
   }
 
   const payload = {
@@ -1156,7 +1187,7 @@ function collectSubmitPayload() {
 
     const invalid = links.find((url) => !/^https?:\/\//i.test(url));
     if (invalid) {
-      throw new Error(`Link adicional inválido: ${invalid}`);
+      throw new Error(`Invalid additional link: ${invalid}`);
     }
 
     if (links.length) payload.other_links = links;
@@ -1180,10 +1211,10 @@ if (submitForm) {
       });
 
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(parseApiError(data, 'Falha no envio da task'));
+      if (!response.ok) throw new Error(parseApiError(data, 'Failed to submit task'));
 
       submitResult.className = 'form-result success';
-      submitResult.textContent = `Task criada com sucesso: ${data.id}`;
+      submitResult.textContent = `Task created successfully: ${data.id}`;
 
       submitForm.reset();
       updateScheduleState();
@@ -1194,7 +1225,7 @@ if (submitForm) {
       fetchStats();
     } catch (err) {
       submitResult.className = 'form-result error';
-      submitResult.textContent = normalizeError(err, 'Falha no envio da task');
+      submitResult.textContent = normalizeError(err, 'Failed to submit task');
     }
   });
 }
@@ -1206,14 +1237,14 @@ if (taskEditForm) {
     if (!currentTaskId) {
       if (taskEditResult) {
         taskEditResult.className = 'form-result error';
-        taskEditResult.textContent = 'Nenhuma tarefa selecionada para edição.';
+        taskEditResult.textContent = 'No task selected for editing.';
       }
       return;
     }
 
     if (taskEditResult) {
       taskEditResult.className = 'form-result';
-      taskEditResult.textContent = 'Salvando alterações...';
+      taskEditResult.textContent = 'Saving changes...';
     }
 
     try {
@@ -1222,18 +1253,18 @@ if (taskEditForm) {
 
       if (taskEditResult) {
         taskEditResult.className = 'form-result success';
-        taskEditResult.textContent = 'Tarefa atualizada com sucesso.';
+        taskEditResult.textContent = 'Task updated successfully.';
       }
 
       closeTaskEditModal();
-      showTaskActionResult('Tarefa atualizada com sucesso.');
+      showTaskActionResult('Task updated successfully.');
       fetchTaskDetails(currentTaskId);
       fetchTasks();
       fetchStats();
     } catch (err) {
       if (taskEditResult) {
         taskEditResult.className = 'form-result error';
-        taskEditResult.textContent = normalizeError(err, 'Falha ao atualizar tarefa');
+        taskEditResult.textContent = normalizeError(err, 'Failed to update task');
       }
     }
   });
@@ -1293,31 +1324,52 @@ function closeCredentialModal() {
 
 function renderCredentialItem(credential) {
   const li = document.createElement('li');
-  li.className = 'item-card';
+  li.className = 'item-card clickable-card';
+  li.setAttribute('role', 'button');
+  li.setAttribute('tabindex', '0');
 
   const active = !!credential.active;
-  const status = active ? 'Ativa' : 'Inativa';
+  const status = active ? 'Active' : 'Inactive';
   const lastUsed = formatDate(credential.last_used_at);
 
   li.innerHTML = `
     <div>
       <strong>${escapeHtml(credential.name || credential.service || '-')}</strong>
       <div class="text-muted small">Service: ${escapeHtml(credential.service || '-')} | Key: ${escapeHtml(credential.key || '****')}</div>
-      <div class="text-muted small">Criada: ${formatDate(credential.created_at)} | Último uso: ${lastUsed}</div>
+      <div class="text-muted small">Created: ${formatDate(credential.created_at)} | Last Used: ${lastUsed}</div>
       <span class="task-status ${active ? 'status-success' : 'status-warning'}">${status}</span>
     </div>
     <div class="item-actions">
       <button type="button" class="btn btn-secondary btn-xs" data-action="edit">Edit</button>
-      <button type="button" class="btn btn-secondary btn-xs" data-action="toggle">${active ? 'Inativar' : 'Ativar'}</button>
+      <button type="button" class="btn btn-secondary btn-xs" data-action="toggle">${active ? 'Deactivate' : 'Activate'}</button>
       <button type="button" class="btn btn-secondary btn-xs" data-action="delete">Delete</button>
     </div>
   `;
 
-  li.querySelector('[data-action="edit"]')?.addEventListener('click', () => {
+  li.querySelector('[data-action="edit"]')?.addEventListener('click', (event) => {
+    event.stopPropagation();
     openCredentialModal(credential);
   });
 
-  li.querySelector('[data-action="toggle"]')?.addEventListener('click', async () => {
+  li.addEventListener('click', (event) => {
+    if (event.target instanceof Element && event.target.closest('button, a, input, select, textarea, label')) {
+      return;
+    }
+    openCredentialModal(credential);
+  });
+
+  li.addEventListener('keydown', (event) => {
+    if (event.target instanceof Element && event.target.closest('button, a, input, select, textarea, label')) {
+      return;
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      openCredentialModal(credential);
+    }
+  });
+
+  li.querySelector('[data-action="toggle"]')?.addEventListener('click', async (event) => {
+    event.stopPropagation();
     try {
       const response = await fetch(`/settings/credentials/${credential.id}`, {
         method: 'PATCH',
@@ -1326,40 +1378,41 @@ function renderCredentialItem(credential) {
       });
 
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(parseApiError(data, 'Falha ao atualizar credencial'));
+      if (!response.ok) throw new Error(parseApiError(data, 'Failed to update credential'));
 
       if (credResult) {
         credResult.className = 'form-result success';
-        credResult.textContent = 'Credencial atualizada com sucesso.';
+        credResult.textContent = 'Credential updated successfully.';
       }
       fetchCredentials();
     } catch (err) {
       if (credResult) {
         credResult.className = 'form-result error';
-        credResult.textContent = normalizeError(err, 'Falha ao atualizar credencial');
+        credResult.textContent = normalizeError(err, 'Failed to update credential');
       }
     }
   });
 
-  li.querySelector('[data-action="delete"]')?.addEventListener('click', async () => {
-    if (!confirm('Excluir esta credencial?')) return;
+  li.querySelector('[data-action="delete"]')?.addEventListener('click', async (event) => {
+    event.stopPropagation();
+    if (!confirm('Delete this credential?')) return;
 
     try {
       const response = await fetch(`/settings/credentials/${credential.id}`, { method: 'DELETE' });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        throw new Error(parseApiError(data, 'Falha ao excluir credencial'));
+        throw new Error(parseApiError(data, 'Failed to delete credential'));
       }
       if (editingCredentialId === credential.id) resetCredentialForm();
       if (credResult) {
         credResult.className = 'form-result success';
-        credResult.textContent = 'Credencial excluída com sucesso.';
+        credResult.textContent = 'Credential deleted successfully.';
       }
       fetchCredentials();
     } catch (err) {
       if (credResult) {
         credResult.className = 'form-result error';
-        credResult.textContent = normalizeError(err, 'Falha ao excluir credencial');
+        credResult.textContent = normalizeError(err, 'Failed to delete credential');
       }
     }
   });
@@ -1370,22 +1423,22 @@ function renderCredentialItem(credential) {
 async function fetchCredentials() {
   if (!credList) return;
 
-  credList.innerHTML = '<li class="loading">Carregando...</li>';
+  credList.innerHTML = '<li class="loading">Loading...</li>';
 
   try {
     const response = await fetch('/settings/credentials');
     const items = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(parseApiError(items, 'Falha ao carregar credenciais'));
+    if (!response.ok) throw new Error(parseApiError(items, 'Failed to load credentials'));
 
     credList.innerHTML = '';
     if (!Array.isArray(items) || items.length === 0) {
-      credList.innerHTML = '<li class="empty-state">Nenhuma credencial configurada</li>';
+      credList.innerHTML = '<li class="empty-state">No credentials configured</li>';
       return;
     }
 
     items.forEach((item) => credList.appendChild(renderCredentialItem(item)));
   } catch (err) {
-    credList.innerHTML = `<li class="empty-state">Erro: ${escapeHtml(normalizeError(err, 'Falha ao carregar credenciais'))}</li>`;
+    credList.innerHTML = `<li class="empty-state">Error: ${escapeHtml(normalizeError(err, 'Failed to load credentials'))}</li>`;
   }
 }
 
@@ -1395,7 +1448,7 @@ if (credForm) {
 
     if (credFormResult) {
       credFormResult.className = 'form-result';
-      credFormResult.textContent = editingCredentialId ? 'Atualizando...' : 'Salvando...';
+      credFormResult.textContent = editingCredentialId ? 'Updating...' : 'Saving...';
     }
 
     const service = credForm.querySelector('#cred-service')?.value;
@@ -1422,7 +1475,7 @@ if (credForm) {
         });
       } else {
         if (!service || !name || !key) {
-          throw new Error('Service, Credential Name e API Key são obrigatórios.');
+          throw new Error('Service, Credential Name, and API Key are required.');
         }
 
         response = await fetch('/settings/credentials', {
@@ -1440,11 +1493,11 @@ if (credForm) {
       }
 
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(parseApiError(data, 'Falha ao salvar credencial'));
+      if (!response.ok) throw new Error(parseApiError(data, 'Failed to save credential'));
 
       if (credResult) {
         credResult.className = 'form-result success';
-        credResult.textContent = editingCredentialId ? 'Credencial atualizada com sucesso.' : 'Credencial salva com sucesso.';
+        credResult.textContent = editingCredentialId ? 'Credential updated successfully.' : 'Credential saved successfully.';
       }
       resetCredentialForm();
       closeCredentialModal();
@@ -1452,7 +1505,7 @@ if (credForm) {
     } catch (err) {
       if (credFormResult) {
         credFormResult.className = 'form-result error';
-        credFormResult.textContent = normalizeError(err, 'Falha ao salvar credencial');
+        credFormResult.textContent = normalizeError(err, 'Failed to save credential');
       }
     }
   });
@@ -1511,7 +1564,9 @@ function closePromptModal() {
 
 function renderPromptItem(prompt) {
   const li = document.createElement('li');
-  li.className = 'item-card';
+  li.className = 'item-card clickable-card';
+  li.setAttribute('role', 'button');
+  li.setAttribute('tabindex', '0');
 
   const active = !!prompt.active;
   const shortSystem = (prompt.system_prompt || '').slice(0, 160);
@@ -1522,20 +1577,39 @@ function renderPromptItem(prompt) {
       <div class="text-muted small">${escapeHtml(prompt.short_description || prompt.purpose || '')}</div>
       <div class="text-muted small">Purpose: ${escapeHtml(prompt.purpose || '-')} | Model: ${escapeHtml(prompt.model_id || '-')}</div>
       <div class="text-muted small">${escapeHtml(shortSystem)}${(prompt.system_prompt || '').length > 160 ? '...' : ''}</div>
-      <span class="task-status ${active ? 'status-success' : 'status-warning'}">${active ? 'Ativo' : 'Inativo'}</span>
+      <span class="task-status ${active ? 'status-success' : 'status-warning'}">${active ? 'Active' : 'Inactive'}</span>
     </div>
     <div class="item-actions">
       <button type="button" class="btn btn-secondary btn-xs" data-action="edit">Edit</button>
-      <button type="button" class="btn btn-secondary btn-xs" data-action="toggle">${active ? 'Desativar' : 'Ativar'}</button>
+      <button type="button" class="btn btn-secondary btn-xs" data-action="toggle">${active ? 'Deactivate' : 'Activate'}</button>
       <button type="button" class="btn btn-secondary btn-xs" data-action="delete">Delete</button>
     </div>
   `;
 
-  li.querySelector('[data-action="edit"]')?.addEventListener('click', () => {
+  li.querySelector('[data-action="edit"]')?.addEventListener('click', (event) => {
+    event.stopPropagation();
     openPromptModal(prompt);
   });
 
-  li.querySelector('[data-action="toggle"]')?.addEventListener('click', async () => {
+  li.addEventListener('click', (event) => {
+    if (event.target instanceof Element && event.target.closest('button, a, input, select, textarea, label')) {
+      return;
+    }
+    openPromptModal(prompt);
+  });
+
+  li.addEventListener('keydown', (event) => {
+    if (event.target instanceof Element && event.target.closest('button, a, input, select, textarea, label')) {
+      return;
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      openPromptModal(prompt);
+    }
+  });
+
+  li.querySelector('[data-action="toggle"]')?.addEventListener('click', async (event) => {
+    event.stopPropagation();
     try {
       const response = await fetch(`/settings/prompts/${prompt.id}`, {
         method: 'PATCH',
@@ -1543,40 +1617,41 @@ function renderPromptItem(prompt) {
         body: JSON.stringify({ active: !active }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(parseApiError(data, 'Falha ao atualizar prompt'));
+      if (!response.ok) throw new Error(parseApiError(data, 'Failed to update prompt'));
 
       if (promptResult) {
         promptResult.className = 'form-result success';
-        promptResult.textContent = 'Prompt atualizado com sucesso.';
+        promptResult.textContent = 'Prompt updated successfully.';
       }
       fetchPrompts();
     } catch (err) {
       if (promptResult) {
         promptResult.className = 'form-result error';
-        promptResult.textContent = normalizeError(err, 'Falha ao atualizar prompt');
+        promptResult.textContent = normalizeError(err, 'Failed to update prompt');
       }
     }
   });
 
-  li.querySelector('[data-action="delete"]')?.addEventListener('click', async () => {
-    if (!confirm('Excluir este prompt?')) return;
+  li.querySelector('[data-action="delete"]')?.addEventListener('click', async (event) => {
+    event.stopPropagation();
+    if (!confirm('Delete this prompt?')) return;
 
     try {
       const response = await fetch(`/settings/prompts/${prompt.id}`, { method: 'DELETE' });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        throw new Error(parseApiError(data, 'Falha ao excluir prompt'));
+        throw new Error(parseApiError(data, 'Failed to delete prompt'));
       }
       if (editingPromptId === prompt.id) resetPromptForm();
       if (promptResult) {
         promptResult.className = 'form-result success';
-        promptResult.textContent = 'Prompt excluído com sucesso.';
+        promptResult.textContent = 'Prompt deleted successfully.';
       }
       fetchPrompts();
     } catch (err) {
       if (promptResult) {
         promptResult.className = 'form-result error';
-        promptResult.textContent = normalizeError(err, 'Falha ao excluir prompt');
+        promptResult.textContent = normalizeError(err, 'Failed to delete prompt');
       }
     }
   });
@@ -1587,22 +1662,22 @@ function renderPromptItem(prompt) {
 async function fetchPrompts() {
   if (!promptList) return;
 
-  promptList.innerHTML = '<li class="loading">Carregando...</li>';
+  promptList.innerHTML = '<li class="loading">Loading...</li>';
 
   try {
     const response = await fetch('/settings/prompts');
     const items = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(parseApiError(items, 'Falha ao carregar prompts'));
+    if (!response.ok) throw new Error(parseApiError(items, 'Failed to load prompts'));
 
     promptList.innerHTML = '';
     if (!Array.isArray(items) || items.length === 0) {
-      promptList.innerHTML = '<li class="empty-state">Nenhum prompt configurado</li>';
+      promptList.innerHTML = '<li class="empty-state">No prompts configured</li>';
       return;
     }
 
     items.forEach((item) => promptList.appendChild(renderPromptItem(item)));
   } catch (err) {
-    promptList.innerHTML = `<li class="empty-state">Erro: ${escapeHtml(normalizeError(err, 'Falha ao carregar prompts'))}</li>`;
+    promptList.innerHTML = `<li class="empty-state">Error: ${escapeHtml(normalizeError(err, 'Failed to load prompts'))}</li>`;
   }
 }
 
@@ -1612,7 +1687,7 @@ if (promptForm) {
 
     if (promptFormResult) {
       promptFormResult.className = 'form-result';
-      promptFormResult.textContent = editingPromptId ? 'Atualizando...' : 'Salvando...';
+      promptFormResult.textContent = editingPromptId ? 'Updating...' : 'Saving...';
     }
 
     const payload = {
@@ -1629,7 +1704,7 @@ if (promptForm) {
 
     try {
       if (!payload.name || !payload.purpose || !payload.system_prompt || !payload.user_prompt) {
-        throw new Error('Prompt name, purpose, system prompt e user prompt são obrigatórios.');
+        throw new Error('Prompt name, purpose, system prompt, and user prompt are required.');
       }
 
       const response = await fetch(editingPromptId ? `/settings/prompts/${editingPromptId}` : '/settings/prompts', {
@@ -1639,11 +1714,11 @@ if (promptForm) {
       });
 
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(parseApiError(data, 'Falha ao salvar prompt'));
+      if (!response.ok) throw new Error(parseApiError(data, 'Failed to save prompt'));
 
       if (promptResult) {
         promptResult.className = 'form-result success';
-        promptResult.textContent = editingPromptId ? 'Prompt atualizado com sucesso.' : 'Prompt salvo com sucesso.';
+        promptResult.textContent = editingPromptId ? 'Prompt updated successfully.' : 'Prompt saved successfully.';
       }
       resetPromptForm();
       closePromptModal();
@@ -1651,10 +1726,247 @@ if (promptForm) {
     } catch (err) {
       if (promptFormResult) {
         promptFormResult.className = 'form-result error';
-        promptFormResult.textContent = normalizeError(err, 'Falha ao salvar prompt');
+        promptFormResult.textContent = normalizeError(err, 'Failed to save prompt');
       }
     }
   });
+}
+
+function setPipelinesResult(message, isError = false) {
+  if (!pipelinesResult) return;
+  pipelinesResult.className = message ? `form-result ${isError ? 'error' : 'success'}` : 'form-result';
+  pipelinesResult.textContent = message || '';
+}
+
+async function fetchPipelines() {
+  if (!pipelinesGrid) return;
+  setPipelinesResult('');
+  pipelinesGrid.innerHTML = '<div class="loading">Loading pipelines...</div>';
+
+  try {
+    const response = await fetch('/settings/pipelines');
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(parseApiError(data, 'Failed to load pipelines'));
+
+    pipelinesGrid.innerHTML = '';
+    if (!Array.isArray(data) || data.length === 0) {
+      pipelinesGrid.innerHTML = '<div class="empty-state">No pipelines configured</div>';
+      return;
+    }
+
+    data.forEach((pipeline) => {
+      const card = document.createElement('article');
+      card.className = 'pipeline-card clickable-card';
+      card.setAttribute('role', 'button');
+      card.setAttribute('tabindex', '0');
+      card.innerHTML = `
+        <h3>${escapeHtml(pipeline.name || '-')}</h3>
+        <p class="text-muted">${escapeHtml(pipeline.description || '')}</p>
+        <div class="pipeline-card-meta">
+          <span><strong>Usage Type:</strong> ${escapeHtml(pipeline.usage_type || '-')}</span>
+          <span><strong>Version:</strong> ${escapeHtml(pipeline.version || '-')}</span>
+          <span><strong>Steps:</strong> ${escapeHtml(pipeline.steps_count || 0)}</span>
+          <span><strong>AI Steps:</strong> ${escapeHtml(pipeline.ai_steps_count || 0)}</span>
+        </div>
+        <div class="pipeline-card-actions">
+          <button type="button" class="btn btn-primary">Configure</button>
+        </div>
+      `;
+
+      const openPipelineDetails = () => {
+        fetchPipelineDetails(String(pipeline.id || ''));
+        if (pipelineDetailsContent) {
+          pipelineDetailsContent.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      };
+
+      card.addEventListener('click', (event) => {
+        if (event.target instanceof Element && event.target.closest('button, a, input, select, textarea, label')) {
+          return;
+        }
+        openPipelineDetails();
+      });
+
+      card.addEventListener('keydown', (event) => {
+        if (event.target instanceof Element && event.target.closest('button, a, input, select, textarea, label')) {
+          return;
+        }
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openPipelineDetails();
+        }
+      });
+
+      card.querySelector('button')?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        openPipelineDetails();
+      });
+      pipelinesGrid.appendChild(card);
+    });
+  } catch (err) {
+    const message = normalizeError(err, 'Failed to load pipelines');
+    pipelinesGrid.innerHTML = `<div class="empty-state">Error: ${escapeHtml(message)}</div>`;
+    setPipelinesResult(message, true);
+  }
+}
+
+function renderPipelineDetails(details) {
+  if (!pipelineDetailsContent) return;
+  const steps = Array.isArray(details?.steps) ? details.steps : [];
+  const availableCredentials = Array.isArray(details?.available_credentials) ? details.available_credentials : [];
+  const availablePrompts = Array.isArray(details?.available_prompts) ? details.available_prompts : [];
+
+  if (pipelineDetailsTitle) {
+    pipelineDetailsTitle.textContent = `Pipeline: ${details?.name || '-'}`;
+  }
+
+  const stepsHtml = steps
+    .map((step) => {
+      const ai = step?.ai || {};
+      const provider = String(ai.provider || '').toLowerCase();
+      const preferredCredentials = availableCredentials.filter(
+        (item) => String(item.service || '').toLowerCase() === provider
+      );
+      const credentialOptions = (preferredCredentials.length ? preferredCredentials : availableCredentials)
+        .map((item) => {
+          const selected = ai.credential_id && ai.credential_id === item.id ? 'selected' : '';
+          const label = `${item.name || '-'} (${item.service || '-'})`;
+          return `<option value="${escapeHtml(item.id)}" ${selected}>${escapeHtml(label)}</option>`;
+        })
+        .join('');
+
+      const promptOptions = availablePrompts
+        .map((item) => {
+          const selected = ai.prompt_id && ai.prompt_id === item.id ? 'selected' : '';
+          const label = `${item.name || '-'}${item.purpose ? ` (${item.purpose})` : ''}`;
+          return `<option value="${escapeHtml(item.id)}" ${selected}>${escapeHtml(label)}</option>`;
+        })
+        .join('');
+
+      const credentialDefaultLabel = ai.default_credential_name
+        ? `Default (${ai.default_credential_name})`
+        : 'No credential defined';
+      const promptDefaultLabel = ai.default_prompt_purpose
+        ? `Default (${ai.default_prompt_purpose})`
+        : 'No default prompt';
+
+      return `
+        <article class="pipeline-step-card">
+          <div class="pipeline-step-header">
+            <h4>${escapeHtml(step.name || step.id || '-')}</h4>
+            <span class="task-status ${step.uses_ai ? 'status-info' : 'status-warning'}">${step.uses_ai ? 'AI' : 'System'}</span>
+          </div>
+          <p class="text-muted">${escapeHtml(step.description || '')}</p>
+          <div class="pipeline-step-meta">
+            <span><strong>ID:</strong> ${escapeHtml(step.id || '-')}</span>
+            <span><strong>Usage Type:</strong> ${escapeHtml(step.type || '-')}</span>
+          </div>
+          ${
+            step.uses_ai
+              ? `
+            <div class="pipeline-ai-panel">
+              <div class="pipeline-step-meta">
+                <span><strong>Provider:</strong> ${escapeHtml(ai.provider || '-')}</span>
+                <span><strong>Model:</strong> ${escapeHtml(ai.model_id || '-')}</span>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Credential</label>
+                  <select class="form-input pipeline-credential-select" data-step-id="${escapeHtml(step.id)}">
+                    <option value="">${escapeHtml(credentialDefaultLabel)}</option>
+                    ${credentialOptions}
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Prompt</label>
+                  <select class="form-input pipeline-prompt-select" data-step-id="${escapeHtml(step.id)}">
+                    <option value="">${escapeHtml(promptDefaultLabel)}</option>
+                    ${promptOptions}
+                  </select>
+                </div>
+              </div>
+              <div class="task-actions">
+                <button type="button" class="btn btn-primary pipeline-step-save-btn" data-step-id="${escapeHtml(step.id)}">Save Configuration</button>
+              </div>
+            </div>
+          `
+              : ''
+          }
+        </article>
+      `;
+    })
+    .join('');
+
+  pipelineDetailsContent.innerHTML = `
+    <div class="pipeline-detail-meta">
+      <div><strong>Slug:</strong> ${escapeHtml(details?.slug || '-')}</div>
+      <div><strong>Usage Type:</strong> ${escapeHtml(details?.usage_type || '-')}</div>
+      <div><strong>Version:</strong> ${escapeHtml(details?.version || '-')}</div>
+    </div>
+    <p class="text-muted">${escapeHtml(details?.description || '')}</p>
+    <div class="pipeline-steps-list">
+      ${stepsHtml}
+    </div>
+  `;
+}
+
+function wirePipelineDetailsActions(pipelineId) {
+  const saveButtons = document.querySelectorAll('.pipeline-step-save-btn');
+  saveButtons.forEach((button) => {
+    button.addEventListener('click', async () => {
+      const stepId = button.dataset.stepId;
+      if (!stepId) return;
+
+      const row = button.closest('.pipeline-step-card');
+      const credentialSelect = row?.querySelector('.pipeline-credential-select');
+      const promptSelect = row?.querySelector('.pipeline-prompt-select');
+
+      const payload = {
+        credential_id: credentialSelect?.value ? String(credentialSelect.value) : null,
+        prompt_id: promptSelect?.value ? String(promptSelect.value) : null,
+      };
+
+      try {
+        button.disabled = true;
+        setPipelinesResult('Saving configuration...');
+
+        const response = await fetch(`/settings/pipelines/${pipelineId}/steps/${stepId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(parseApiError(data, 'Failed to save step configuration'));
+
+        setPipelinesResult('Pipeline configuration updated successfully.');
+        await fetchPipelineDetails(pipelineId, { silent: true });
+      } catch (err) {
+        setPipelinesResult(normalizeError(err, 'Failed to save step configuration'), true);
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+}
+
+async function fetchPipelineDetails(pipelineId, options = {}) {
+  const silent = !!options.silent;
+  if (!pipelineId || !pipelineDetailsContent) return;
+
+  currentPipelineId = pipelineId;
+  if (!silent) pipelineDetailsContent.innerHTML = '<div class="loading">Loading pipeline details...</div>';
+
+  try {
+    const response = await fetch(`/settings/pipelines/${pipelineId}`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(parseApiError(data, 'Failed to load details da pipeline'));
+
+    currentPipelineDetails = data;
+    renderPipelineDetails(data);
+    wirePipelineDetailsActions(pipelineId);
+  } catch (err) {
+    pipelineDetailsContent.innerHTML = `<div class="form-result error">Error: ${escapeHtml(normalizeError(err, 'Failed to load details da pipeline'))}</div>`;
+  }
 }
 
 bindOverlayModalClose(credentialModal, closeCredentialModal);
@@ -1679,6 +1991,20 @@ if (promptCancelBtn) {
 
 if (taskEditCancelBtn) {
   taskEditCancelBtn.addEventListener('click', closeTaskEditModal);
+}
+
+if (backToTasksBtn) {
+  backToTasksBtn.addEventListener('click', () => {
+    showSection('tasks-section');
+  });
+}
+
+if (sidebarToggleBtn) {
+  sidebarToggleBtn.addEventListener('click', () => {
+    const collapsed = !layoutEl?.classList.contains('sidebar-collapsed');
+    applySidebarCollapsedState(collapsed);
+    persistSidebarCollapsedState(collapsed);
+  });
 }
 
 if (refreshBtn) {
@@ -1775,6 +2101,7 @@ async function updateHealth() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  applySidebarCollapsedState(readSidebarCollapsedState());
   showSection('tasks-section');
 
   updateScheduleState();
@@ -1789,4 +2116,5 @@ document.addEventListener('DOMContentLoaded', () => {
   fetchTasks();
   fetchCredentials();
   fetchPrompts();
+  fetchPipelines();
 });

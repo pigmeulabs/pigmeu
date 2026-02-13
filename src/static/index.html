@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en-US">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -11,6 +11,9 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <img src="/ui/static/logo-pigmeu-labs-2.png" alt="Pigmeu Labs" class="logo-image">
+                <button id="sidebar-toggle-btn" class="sidebar-toggle" type="button" aria-label="Collapse Sidebar" title="Collapse Sidebar">
+                    <span class="sidebar-toggle-icon" aria-hidden="true"></span>
+                </button>
             </div>
 
             <nav class="nav-menu">
@@ -22,7 +25,7 @@
                     <div class="nav-submenu">
                         <a href="#articles" class="nav-link nav-subitem" data-section="articles-section">Articles</a>
                         <a href="#book-review" class="nav-link nav-subitem" data-section="submit-section">Book Review</a>
-                        <a href="#social-media" class="nav-link nav-subitem" data-section="social-media-section">Social media</a>
+                        <a href="#social-media" class="nav-link nav-subitem" data-section="social-media-section">Social Media</a>
                     </div>
                 </div>
 
@@ -34,6 +37,7 @@
                         <a href="#credentials" class="nav-link nav-subitem" data-section="credentials-section">Credentials</a>
                         <a href="#content-schemas" class="nav-link nav-subitem" data-section="content-schemas-section">Content Schemas</a>
                         <a href="#prompts" class="nav-link nav-subitem" data-section="prompts-section">Prompts</a>
+                        <a href="#pipelines" class="nav-link nav-subitem" data-section="pipelines-section">Pipelines</a>
                     </div>
                 </div>
 
@@ -43,7 +47,7 @@
             <div class="sidebar-footer">
                 <div class="status-indicator">
                     <div class="dot online"></div>
-                    <span>Sistema Online</span>
+                    <span>System Online</span>
                 </div>
             </div>
         </aside>
@@ -51,12 +55,12 @@
         <main class="main">
             <header class="header">
                 <div class="header-left">
-                    <h1 id="page-title">Tarefas</h1>
+                    <h1 id="page-title">Tasks Dashboard</h1>
                 </div>
                 <div class="header-right">
                     <div class="health-badge">
                         <span class="dot"></span>
-                        <span id="health-status">Pronto</span>
+                        <span id="health-status">Ready</span>
                     </div>
                 </div>
             </header>
@@ -67,51 +71,57 @@
                         <h2>Analytics</h2>
                     </div>
                     <div class="module-panel">
-                        <p class="text-muted">Módulo em preparação.</p>
+                        <p class="text-muted">Module coming soon.</p>
                     </div>
                 </section>
 
                 <section id="tasks-section" class="section active">
                     <div class="section-header">
-                        <h2>Minhas Tarefas</h2>
+                        <h2>My Tasks</h2>
                         <div class="controls">
-                            <button id="refresh-tasks" class="btn btn-secondary">🔄 Atualizar</button>
+                            <button id="refresh-tasks" class="btn btn-secondary">Refresh</button>
                         </div>
                     </div>
 
                     <div class="filters">
-                        <input type="text" id="search-tasks" placeholder="Buscar por título/autor..." class="search-input">
+                        <input type="text" id="search-tasks" placeholder="Search by title/author..." class="search-input">
                         <select id="filter-status" class="filter-select">
-                            <option value="">Todos os status</option>
-                            <option value="pending_scrape">Pendente de scrape</option>
-                            <option value="context_generation">Gerando contexto</option>
-                            <option value="context_generated">Contexto gerado</option>
-                            <option value="pending_article">Pendente de artigo</option>
-                            <option value="article_generated">Artigo gerado</option>
-                            <option value="ready_for_review">Pronto para revisão</option>
-                            <option value="published">Publicado</option>
-                            <option value="scraping_failed">Falha</option>
+                            <option value="">All statuses</option>
+                            <option value="pending_scrape">Pending Scrape</option>
+                            <option value="context_generation">Generating Context</option>
+                            <option value="context_generated">Context Generated</option>
+                            <option value="pending_article">Pending Article</option>
+                            <option value="article_generated">Article Generated</option>
+                            <option value="ready_for_review">Ready for Review</option>
+                            <option value="published">Published</option>
+                            <option value="scraping_failed">Failed</option>
                         </select>
                     </div>
 
                     <div id="stats-strip" class="stats-strip">
-                        <div class="loading">Carregando métricas...</div>
+                        <div class="loading">Loading metrics...</div>
                     </div>
 
                     <div id="tasks-grid" class="tasks-grid">
-                        <div class="loading">Carregando tarefas...</div>
+                        <div class="loading">Loading tasks...</div>
                     </div>
 
                     <div class="pagination-controls">
-                        <button id="prev-page" class="btn btn-secondary">← Anterior</button>
-                        <span id="tasks-pagination">Página 1</span>
-                        <button id="next-page" class="btn btn-secondary">Próxima →</button>
+                        <button id="prev-page" class="btn btn-secondary">← Previous</button>
+                        <span id="tasks-pagination">Page 1</span>
+                        <button id="next-page" class="btn btn-secondary">Next →</button>
                     </div>
+                </section>
 
-                    <div id="task-modal" class="modal">
-                        <div class="modal-content task-details-modal">
-                            <button class="modal-close">&times;</button>
+                <section id="task-details-section" class="section">
+                    <div class="section-header">
+                        <h2>Task Details</h2>
+                        <div class="controls">
+                            <button id="back-to-tasks-btn" class="btn btn-secondary">← Back to Tasks</button>
                         </div>
+                    </div>
+                    <div id="task-details-content" class="module-panel">
+                        <p class="text-muted">Select a task to view details.</p>
                     </div>
                 </section>
 
@@ -145,8 +155,8 @@
                                             <div class="other-link-row">
                                                 <input type="url" class="form-input other-link" placeholder="Link to complementary content about book or author">
                                                 <div class="other-link-actions">
-                                                    <button type="button" class="btn btn-secondary add-link-btn" aria-label="Adicionar link">+</button>
-                                                    <button type="button" class="btn btn-secondary remove-link-btn" aria-label="Remover link">-</button>
+                                                    <button type="button" class="btn btn-secondary add-link-btn" aria-label="Add Link">+</button>
+                                                    <button type="button" class="btn btn-secondary remove-link-btn" aria-label="Remove Link">-</button>
                                                 </div>
                                             </div>
                                         </div>
@@ -218,7 +228,7 @@
                         <h2>Content Copilot</h2>
                     </div>
                     <div class="module-panel">
-                        <p class="text-muted">Módulo em preparação.</p>
+                        <p class="text-muted">Module coming soon.</p>
                     </div>
                 </section>
 
@@ -227,16 +237,16 @@
                         <h2>Articles</h2>
                     </div>
                     <div class="module-panel">
-                        <p class="text-muted">Módulo em preparação.</p>
+                        <p class="text-muted">Module coming soon.</p>
                     </div>
                 </section>
 
                 <section id="social-media-section" class="section">
                     <div class="section-header">
-                        <h2>Social media</h2>
+                        <h2>Social Media</h2>
                     </div>
                     <div class="module-panel">
-                        <p class="text-muted">Módulo em preparação.</p>
+                        <p class="text-muted">Module coming soon.</p>
                     </div>
                 </section>
 
@@ -245,7 +255,7 @@
                         <h2>SEO Tools</h2>
                     </div>
                     <div class="module-panel">
-                        <p class="text-muted">Módulo em preparação.</p>
+                        <p class="text-muted">Module coming soon.</p>
                     </div>
                 </section>
 
@@ -254,7 +264,7 @@
                         <h2>Settings</h2>
                     </div>
                     <div class="module-panel">
-                        <p class="text-muted">Configurações gerais em preparação.</p>
+                        <p class="text-muted">General settings coming soon.</p>
                     </div>
                 </section>
 
@@ -268,7 +278,7 @@
 
                     <div class="module-panel">
                         <ul id="cred-list" class="items-list">
-                            <li class="empty-state">Nenhuma credencial configurada</li>
+                            <li class="empty-state">No credentials configured</li>
                         </ul>
                         <div id="cred-result" class="form-result"></div>
                     </div>
@@ -279,7 +289,7 @@
                         <h2>Content Schemas</h2>
                     </div>
                     <div class="module-panel">
-                        <p class="text-muted">Módulo em preparação.</p>
+                        <p class="text-muted">Module coming soon.</p>
                     </div>
                 </section>
 
@@ -293,10 +303,26 @@
 
                     <div class="module-panel">
                         <ul id="prompt-list" class="items-list">
-                            <li class="empty-state">Nenhum prompt configurado</li>
+                            <li class="empty-state">No prompts configured</li>
                         </ul>
                         <div id="prompt-result" class="form-result"></div>
                     </div>
+                </section>
+
+                <section id="pipelines-section" class="section">
+                    <div class="section-header">
+                        <h2>Pipelines</h2>
+                    </div>
+                    <div id="pipelines-grid" class="pipelines-grid">
+                        <div class="loading">Loading pipelines...</div>
+                    </div>
+                    <div id="pipeline-details-panel" class="module-panel">
+                        <h3 id="pipeline-details-title">Select a Pipeline</h3>
+                        <div id="pipeline-details-content" class="text-muted">
+                            Click a card to view details, stages, and settings.
+                        </div>
+                    </div>
+                    <div id="pipelines-result" class="form-result"></div>
                 </section>
 
                 <section id="logout-section" class="section">
@@ -304,7 +330,7 @@
                         <h2>Logout</h2>
                     </div>
                     <div class="module-panel">
-                        <p class="text-muted">A autenticação ainda não está implementada.</p>
+                        <p class="text-muted">Authentication is not implemented yet.</p>
                     </div>
                 </section>
             </div>
@@ -313,7 +339,7 @@
 
     <div id="credential-modal" class="modal">
         <div class="modal-content modal-sm">
-            <button class="modal-close" type="button" aria-label="Fechar">&times;</button>
+            <button class="modal-close" type="button" aria-label="Close">&times;</button>
             <h3 id="credential-modal-title">Create Credential</h3>
             <form id="cred-form" class="modal-form">
                 <div class="form-group">
@@ -343,10 +369,10 @@
                 </div>
 
                 <label class="checkbox-label">
-                    <input type="checkbox" name="encrypted" checked> Criptografar
+                    <input type="checkbox" name="encrypted" checked> Encrypt
                 </label>
                 <label class="checkbox-label">
-                    <input type="checkbox" name="active" checked> Ativa
+                    <input type="checkbox" name="active" checked> Active
                 </label>
 
                 <div class="task-actions">
@@ -360,7 +386,7 @@
 
     <div id="prompt-modal" class="modal">
         <div class="modal-content modal-lg">
-            <button class="modal-close" type="button" aria-label="Fechar">&times;</button>
+            <button class="modal-close" type="button" aria-label="Close">&times;</button>
             <h3 id="prompt-modal-title">Create Prompt</h3>
             <form id="prompt-form" class="modal-form">
                 <div class="form-group">
@@ -404,7 +430,7 @@
                 </div>
 
                 <label class="checkbox-label">
-                    <input type="checkbox" name="active" checked> Ativo
+                    <input type="checkbox" name="active" checked> Active
                 </label>
 
                 <div class="task-actions">
@@ -418,8 +444,8 @@
 
     <div id="task-edit-modal" class="modal">
         <div class="modal-content modal-lg">
-            <button class="modal-close" type="button" aria-label="Fechar">&times;</button>
-            <h3>Alterar tarefa</h3>
+            <button class="modal-close" type="button" aria-label="Close">&times;</button>
+            <h3>Edit Task</h3>
             <form id="task-edit-form" class="modal-form">
                 <div class="form-group">
                     <label for="task-edit-title" class="form-label">Book Title *</label>
@@ -448,7 +474,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="task-edit-other-links" class="form-label">Additional Content Links (1 por linha)</label>
+                    <label for="task-edit-other-links" class="form-label">Additional Content Links (1 per line)</label>
                     <textarea id="task-edit-other-links" class="form-textarea" rows="3"></textarea>
                 </div>
 
@@ -465,7 +491,7 @@
                     <div class="form-group">
                         <label for="task-edit-article-status" class="form-label">Article Status</label>
                         <select id="task-edit-article-status" class="form-input">
-                            <option value="">Selecione</option>
+                            <option value="">Select</option>
                             <option value="draft">Draft</option>
                             <option value="in_review">In review</option>
                             <option value="approved">Approved</option>
@@ -489,8 +515,8 @@
                 </label>
 
                 <div class="task-actions">
-                    <button type="submit" class="btn btn-primary">Salvar alterações</button>
-                    <button id="task-edit-cancel-btn" type="button" class="btn btn-secondary">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <button id="task-edit-cancel-btn" type="button" class="btn btn-secondary">Cancel</button>
                 </div>
                 <div id="task-edit-result" class="form-result"></div>
             </form>

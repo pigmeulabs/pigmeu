@@ -31,6 +31,13 @@ async def get_prompt_repo(
     return PromptRepository(db)
 
 
+async def get_pipeline_repo(
+    db: AsyncIOMotorDatabase = Depends(get_database),
+) -> 'PipelineConfigRepository':
+    from src.db.repositories import PipelineConfigRepository
+    return PipelineConfigRepository(db)
+
+
 async def get_submission_repo(
     db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> SubmissionRepository:

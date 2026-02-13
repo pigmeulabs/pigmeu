@@ -49,3 +49,19 @@ Ao clicar no card, deve exibir a modal com as informações da pipeline:
 - Listar todas as etapas, com as informações: Nome etapa, Descrição, Tipo
 - Quando a pipeline utilizar uma api de IA, disponibilizar a informação da credencial, e prompt utilizados
   - Permitir alterar essas informações, disponibilizando credenciais e prompts cadastrados no sistema.
+
+
+Na interface de detalhes de uma tarefa, ao acionar a opção "retry" em qualquer step da pipeline, o sistema deverá atualizar o status de todos os steps subsequentes para to do.
+
+Atualmente, na interface de detalhes de uma tarefa, a oção "alterar tarefa" está abrindo um modal para alteração da tarefa. Esse comportamento deverá ser alterado seguindo os requisitos abaixo:
+  - Ao solicitar a alteração de uma tarefa, a interface que é exibida deve ser a mesma (ou no mesmo padrão) da interface de inclusão de uma tarefa, carregando os dados da tarefa pertinente.
+
+### MELHORIAS E CORREÇÕES UI/UX
+
+1. Em todas as interfaces onde são exibidos cards, por exemplo: Interface de tarefas, interface de prompts, interface de credenciais, etc.), deverá ser implementado o seguinte recurso:
+   1. O card inteiro deve ser "clicável", quando o usuário clicar no card, deve ser exibida a interface/modal (conforme o módulo, exemplo: Interrface de Prompts deve exibir a modal de edição, interface de Tarefas deve abrir a interface de detalhes da tarefa, etc...) de edição/detalhamento do item.
+
+2. Implemente um recurso que recolha e expanda o menu lateral.
+
+
+
