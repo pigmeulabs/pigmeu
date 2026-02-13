@@ -8,6 +8,7 @@ from typing import List, Dict, Any
 
 from src.db.connection import get_database
 from src.workers.llm_client import LLMClient
+from src.workers.prompt_builder import build_user_prompt_with_output_format
 
 
 class ArticleStructurer:
@@ -54,6 +55,7 @@ class ArticleStructurer:
         user_prompt = user_prompt.replace("{{title}}", book_data.get("title", ""))
         user_prompt = user_prompt.replace("{{author}}", book_data.get("author", ""))
         user_prompt = user_prompt.replace("{{data}}", json.dumps(book_data, ensure_ascii=True))
+        user_prompt = build_user_prompt_with_output_format(user_prompt, prompt_doc)
 
         try:
             response = await self._llm_generate(
@@ -147,6 +149,7 @@ class ArticleStructurer:
             user_prompt = user_prompt.replace("{{topic2}}", topic2)
             user_prompt = user_prompt.replace("{{topic3}}", topic3)
             user_prompt = user_prompt.replace("{{context}}", context or "")
+            user_prompt = build_user_prompt_with_output_format(user_prompt, prompt_doc)
 
             try:
                 llm_article = await self._llm_generate(

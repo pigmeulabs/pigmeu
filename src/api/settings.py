@@ -42,6 +42,7 @@ BOOK_REVIEW_PIPELINE_TEMPLATE: Dict[str, Any] = {
             "description": "Extrai metadados bibliograficos da pagina do livro na Amazon.",
             "type": "scraping",
             "uses_ai": False,
+            "delay_seconds": 0,
         },
         {
             "id": "additional_links_scrape",
@@ -49,6 +50,7 @@ BOOK_REVIEW_PIPELINE_TEMPLATE: Dict[str, Any] = {
             "description": "Processa links adicionais e extrai dados bibliograficos via IA.",
             "type": "scraping+llm",
             "uses_ai": True,
+            "delay_seconds": 0,
             "ai": {
                 "provider": "mistral",
                 "model_id": "mistral-large-latest",
@@ -64,6 +66,7 @@ BOOK_REVIEW_PIPELINE_TEMPLATE: Dict[str, Any] = {
             "description": "Gera resumo dos links adicionais com foco em livro e autor.",
             "type": "llm",
             "uses_ai": True,
+            "delay_seconds": 0,
             "ai": {
                 "provider": "groq",
                 "model_id": "llama-3.3-70b-versatile",
@@ -79,6 +82,7 @@ BOOK_REVIEW_PIPELINE_TEMPLATE: Dict[str, Any] = {
             "description": "Consolida dados bibliograficos sem duplicidade.",
             "type": "data-processing",
             "uses_ai": False,
+            "delay_seconds": 0,
         },
         {
             "id": "internet_research",
@@ -86,6 +90,7 @@ BOOK_REVIEW_PIPELINE_TEMPLATE: Dict[str, Any] = {
             "description": "Pesquisa web sobre livro/autor e sintetiza assuntos e temas.",
             "type": "search+llm",
             "uses_ai": True,
+            "delay_seconds": 0,
             "ai": {
                 "provider": "groq",
                 "model_id": "llama-3.3-70b-versatile",
@@ -101,6 +106,7 @@ BOOK_REVIEW_PIPELINE_TEMPLATE: Dict[str, Any] = {
             "description": "Gera base de conhecimento consolidada para suportar a escrita.",
             "type": "llm",
             "uses_ai": True,
+            "delay_seconds": 0,
             "ai": {
                 "provider": "openai",
                 "model_id": "gpt-4o-mini",
@@ -116,6 +122,7 @@ BOOK_REVIEW_PIPELINE_TEMPLATE: Dict[str, Any] = {
             "description": "Gera artigo final em markdown a partir do contexto produzido.",
             "type": "llm",
             "uses_ai": True,
+            "delay_seconds": 0,
             "ai": {
                 "provider": "openai",
                 "model_id": "gpt-4o-mini",
@@ -131,6 +138,7 @@ BOOK_REVIEW_PIPELINE_TEMPLATE: Dict[str, Any] = {
             "description": "Etapa final de aprovacao para revisao/publicacao.",
             "type": "workflow",
             "uses_ai": False,
+            "delay_seconds": 0,
         },
     ],
 }
@@ -170,6 +178,14 @@ def _prompt_option(doc: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _safe_delay_seconds(value: Any) -> int:
+    try:
+        parsed = int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, parsed)
+
+
 async def _ensure_book_review_pipeline(pipeline_repo) -> Dict[str, Any]:
     doc = await pipeline_repo.get_by_pipeline_id(BOOK_REVIEW_PIPELINE_ID)
     if doc:
@@ -205,6 +221,7 @@ async def _build_pipeline_detail_response(
             "description": item.get("description"),
             "type": item.get("type"),
             "uses_ai": bool(item.get("uses_ai")),
+            "delay_seconds": _safe_delay_seconds(item.get("delay_seconds", 0)),
         }
 
         if step["uses_ai"]:
@@ -381,8 +398,12 @@ async def update_pipeline_step_ai(
 
     update_credential = "credential_id" in payload
     update_prompt = "prompt_id" in payload
-    if not update_credential and not update_prompt:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="credential_id or prompt_id is required")
+    update_delay = "delay_seconds" in payload
+    if not update_credential and not update_prompt and not update_delay:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="credential_id, prompt_id or delay_seconds is required",
+        )
 
     pipeline_doc = await _ensure_book_review_pipeline(pipeline_repo)
     steps = pipeline_doc.get("steps", []) if isinstance(pipeline_doc.get("steps"), list) else []
@@ -390,7 +411,8 @@ async def update_pipeline_step_ai(
     if not step:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline step not found")
 
-    if not bool(step.get("uses_ai")):
+    uses_ai = bool(step.get("uses_ai"))
+    if (update_credential or update_prompt) and not uses_ai:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="This step does not use AI settings")
 
     ai = step.get("ai", {}) if isinstance(step.get("ai"), dict) else {}
@@ -415,7 +437,34 @@ async def update_pipeline_step_ai(
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
             ai["prompt_id"] = str(prompt.get("_id"))
 
-    step["ai"] = ai
+    if uses_ai:
+        step["ai"] = ai
+
+    if update_delay:
+        raw_delay = payload.get("delay_seconds")
+        if raw_delay in (None, ""):
+            delay_seconds = 0
+        else:
+            try:
+                delay_seconds = int(raw_delay)
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="delay_seconds must be an integer >= 0",
+                )
+            if delay_seconds < 0:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="delay_seconds must be >= 0",
+                )
+            if delay_seconds > 86400:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="delay_seconds must be <= 86400",
+                )
+
+        step["delay_seconds"] = delay_seconds
+
     pipeline_doc["steps"] = steps
 
     save_payload = {
@@ -464,6 +513,7 @@ async def list_prompts(
                 model_id=d.get("model_id"),
                 temperature=d.get("temperature", 0.7),
                 max_tokens=d.get("max_tokens", 2000),
+                expected_output_format=d.get("expected_output_format"),
                 schema_example=d.get("schema_example"),
                 active=d.get("active", True),
                 created_at=d.get("created_at"),
@@ -492,6 +542,7 @@ async def get_prompt(prompt_id: str, repo=Depends(get_prompt_repo)):
             model_id=doc.get("model_id"),
             temperature=doc.get("temperature", 0.7),
             max_tokens=doc.get("max_tokens", 2000),
+            expected_output_format=doc.get("expected_output_format"),
             schema_example=doc.get("schema_example"),
             active=doc.get("active", True),
             created_at=doc.get("created_at"),
@@ -519,6 +570,7 @@ async def create_prompt(payload: PromptCreate, repo=Depends(get_prompt_repo)):
             model_id=doc.get("model_id"),
             temperature=doc.get("temperature", 0.7),
             max_tokens=doc.get("max_tokens", 2000),
+            expected_output_format=doc.get("expected_output_format"),
             schema_example=doc.get("schema_example"),
             active=doc.get("active", True),
             created_at=doc.get("created_at"),
@@ -554,6 +606,7 @@ async def update_prompt(prompt_id: str, payload: PromptUpdate, repo=Depends(get_
         model_id=doc.get("model_id"),
         temperature=doc.get("temperature", 0.7),
         max_tokens=doc.get("max_tokens", 2000),
+        expected_output_format=doc.get("expected_output_format"),
         schema_example=doc.get("schema_example"),
         active=doc.get("active", True),
         created_at=doc.get("created_at"),

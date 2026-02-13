@@ -19,13 +19,16 @@ from src.db.repositories import (
     SummaryRepository,
     PromptRepository,
     CredentialRepository,
+    PipelineConfigRepository,
 )
 from src.models.enums import SubmissionStatus
 from src.scrapers.amazon import AmazonScraper
 from src.scrapers.link_finder import LinkFinder
 from src.workers.llm_client import LLMClient
+from src.workers.prompt_builder import build_user_prompt_with_output_format
 
 logger = logging.getLogger(__name__)
+BOOK_REVIEW_PIPELINE_ID = "book_review_v2"
 
 LINK_BIBLIO_PROMPT = {
     "name": "Book Review - Additional Link Bibliographic Extractor",
@@ -35,16 +38,62 @@ LINK_BIBLIO_PROMPT = {
     "temperature": 0.1,
     "max_tokens": 900,
     "system_prompt": (
-        "You are a bibliographic extraction engine. Extract only factual information about a book and its author from "
-        "provided text. Return strict JSON only."
+        "You are a bibliographic extraction engine optimized for API usage. "
+        "Extract only factual information about a book and its author from the provided text. "
+        "Do not invent data. Respond in Portuguese (pt-BR). "
+        "Return strict JSON only."
     ),
     "user_prompt": (
-        "Book title: {{title}}\n"
-        "Author: {{author}}\n"
-        "Content:\n{{content}}\n\n"
-        "Return JSON with these keys when available: "
-        "title, title_original, authors, language, original_language, edition, average_rating, pages, publisher, "
-        "publication_date, asin, isbn_10, isbn_13, price_book, price_ebook, cover_image_url."
+        "Task: extract bibliographic metadata from the source content.\n"
+        "Book title (reference): {{title}}\n"
+        "Author (reference): {{author}}\n\n"
+        "Source content:\n{{content}}\n\n"
+        "Rules:\n"
+        "- Use only information present in the source.\n"
+        "- Keep numeric values as numbers when possible.\n"
+        "- If a field is unknown, use null.\n"
+        "- Respond in Portuguese (pt-BR), except URLs/identifiers.\n"
+        "- Return only the JSON object."
+    ),
+    "expected_output_format": (
+        "{\n"
+        '  "title": "string|null",\n'
+        '  "title_original": "string|null",\n'
+        '  "authors": ["string"],\n'
+        '  "language": "string|null",\n'
+        '  "original_language": "string|null",\n'
+        '  "edition": "string|null",\n'
+        '  "average_rating": "number|null",\n'
+        '  "pages": "number|null",\n'
+        '  "publisher": "string|null",\n'
+        '  "publication_date": "string|null",\n'
+        '  "asin": "string|null",\n'
+        '  "isbn_10": "string|null",\n'
+        '  "isbn_13": "string|null",\n'
+        '  "price_book": "number|string|null",\n'
+        '  "price_ebook": "number|string|null",\n'
+        '  "cover_image_url": "string|null"\n'
+        "}"
+    ),
+    "schema_example": (
+        "{\n"
+        '  "title": "Scrum e Kanban",\n'
+        '  "title_original": "Scrum and Kanban",\n'
+        '  "authors": ["Chico Alff"],\n'
+        '  "language": "Português",\n'
+        '  "original_language": "Inglês",\n'
+        '  "edition": "2ª edição",\n'
+        '  "average_rating": 4.6,\n'
+        '  "pages": 312,\n'
+        '  "publisher": "Editora Exemplo",\n'
+        '  "publication_date": "2024-06-18",\n'
+        '  "asin": "B0ABC12345",\n'
+        '  "isbn_10": "1234567890",\n'
+        '  "isbn_13": "9781234567897",\n'
+        '  "price_book": 89.9,\n'
+        '  "price_ebook": 39.9,\n'
+        '  "cover_image_url": "https://exemplo.com/capa.jpg"\n'
+        "}"
     ),
 }
 
@@ -56,15 +105,37 @@ LINK_SUMMARY_PROMPT = {
     "temperature": 0.3,
     "max_tokens": 900,
     "system_prompt": (
-        "You summarize web content for editorial book research. Focus strictly on insights about book and author. "
-        "Return strict JSON only."
+        "You summarize web content for editorial book research. "
+        "Focus strictly on insights about the book and author. "
+        "Respond in Portuguese (pt-BR). Return strict JSON only."
     ),
     "user_prompt": (
+        "Task: produce a concise summary from this source.\n"
         "Book title: {{title}}\n"
         "Author: {{author}}\n"
-        "Source URL: {{url}}\n"
-        "Content:\n{{content}}\n\n"
-        "Return JSON with keys: summary, topics, key_points, credibility."
+        "Source URL: {{url}}\n\n"
+        "Source content:\n{{content}}\n\n"
+        "Rules:\n"
+        "- Focus only on relevant information about the book and author.\n"
+        "- Keep summary objective and factual.\n"
+        "- Respond in Portuguese (pt-BR).\n"
+        "- Return only the JSON object."
+    ),
+    "expected_output_format": (
+        "{\n"
+        '  "summary": "string",\n'
+        '  "topics": ["string"],\n'
+        '  "key_points": ["string"],\n'
+        '  "credibility": "alta|media|baixa"\n'
+        "}"
+    ),
+    "schema_example": (
+        "{\n"
+        '  "summary": "O conteúdo destaca os principais conceitos do livro e relaciona os argumentos com a trajetória do autor.",\n'
+        '  "topics": ["gestão ágil", "kanban", "melhoria contínua"],\n'
+        '  "key_points": ["Explica fundamentos práticos", "Compara abordagens", "Apresenta exemplos reais"],\n'
+        '  "credibility": "media"\n'
+        "}"
     ),
 }
 
@@ -76,14 +147,34 @@ WEB_RESEARCH_PROMPT = {
     "temperature": 0.25,
     "max_tokens": 1100,
     "system_prompt": (
-        "You are a literary research analyst. Synthesize topics, themes, and context about the book and author from "
-        "web source excerpts. Return strict JSON only."
+        "You are a literary research analyst. "
+        "Synthesize topics, themes, and context about the book and author from web source excerpts. "
+        "Respond in Portuguese (pt-BR). Return strict JSON only."
     ),
     "user_prompt": (
+        "Task: consolidate web research notes.\n"
         "Book title: {{title}}\n"
         "Author: {{author}}\n\n"
         "Sources:\n{{sources}}\n\n"
-        "Return JSON with keys: research_markdown, topics, key_insights."
+        "Rules:\n"
+        "- Prioritize themes, contexts, and discussion points useful for editorial analysis.\n"
+        "- Keep statements grounded in provided sources.\n"
+        "- Respond in Portuguese (pt-BR).\n"
+        "- Return only the JSON object."
+    ),
+    "expected_output_format": (
+        "{\n"
+        '  "research_markdown": "string (markdown)",\n'
+        '  "topics": ["string"],\n'
+        '  "key_insights": ["string"]\n'
+        "}"
+    ),
+    "schema_example": (
+        "{\n"
+        '  "research_markdown": "## Pesquisa Web\\n\\n### Temas recorrentes\\n- Tema 1\\n- Tema 2",\n'
+        '  "topics": ["tema 1", "tema 2", "tema 3"],\n'
+        '  "key_insights": ["Insight objetivo 1", "Insight objetivo 2"]\n'
+        "}"
     ),
 }
 
@@ -96,6 +187,37 @@ class ScraperTask(Task):
     retry_backoff = True
     retry_backoff_max = 600
     retry_jitter = True
+
+
+async def _get_step_delay_seconds(step_id: str) -> int:
+    """Resolve configured delay (in seconds) for a pipeline step."""
+    try:
+        db = await get_db()
+        pipeline_repo = PipelineConfigRepository(db)
+        pipeline_doc = await pipeline_repo.get_by_pipeline_id(BOOK_REVIEW_PIPELINE_ID)
+        if not pipeline_doc:
+            return 0
+
+        raw_steps = pipeline_doc.get("steps", []) if isinstance(pipeline_doc.get("steps"), list) else []
+        step_doc = next((item for item in raw_steps if item.get("id") == step_id), None)
+        if not step_doc:
+            return 0
+
+        raw_delay = step_doc.get("delay_seconds", 0)
+        delay_seconds = int(raw_delay or 0)
+        return max(0, delay_seconds)
+    except Exception as exc:
+        logger.warning("Failed to resolve pipeline step delay for '%s': %s", step_id, exc)
+        return 0
+
+
+def _enqueue_task(task_callable, delay_seconds: int, **kwargs) -> None:
+    """Queue a celery task optionally using countdown delay."""
+    safe_delay = max(0, int(delay_seconds or 0))
+    if safe_delay > 0:
+        task_callable.apply_async(kwargs=kwargs, countdown=safe_delay)
+        return
+    task_callable.delay(**kwargs)
 
 
 def _dedupe_list(values: Iterable[str]) -> List[str]:
@@ -271,6 +393,7 @@ async def _ensure_prompt(prompt_repo: PromptRepository, prompt_data: Dict[str, A
         "short_description": prompt_data["short_description"],
         "system_prompt": prompt_data["system_prompt"],
         "user_prompt": prompt_data["user_prompt"],
+        "expected_output_format": prompt_data.get("expected_output_format") or prompt_data.get("schema_example"),
         "model_id": prompt_data["model_id"],
         "temperature": prompt_data["temperature"],
         "max_tokens": prompt_data["max_tokens"],
@@ -278,9 +401,8 @@ async def _ensure_prompt(prompt_repo: PromptRepository, prompt_data: Dict[str, A
     }
 
     if existing:
-        await prompt_repo.update(existing["_id"], payload)
-        updated = await prompt_repo.get_by_id(existing["_id"])
-        return updated or {**existing, **payload}
+        # Preserve user-managed prompts; do not overwrite defaults automatically.
+        return existing
 
     prompt_id = await prompt_repo.create(payload)
     created = await prompt_repo.get_by_id(prompt_id)
@@ -328,6 +450,7 @@ async def _run_link_bibliographic_extraction(
     user_prompt = user_prompt.replace("{{title}}", str(title or ""))
     user_prompt = user_prompt.replace("{{author}}", str(author or ""))
     user_prompt = user_prompt.replace("{{content}}", content[:4500])
+    user_prompt = build_user_prompt_with_output_format(user_prompt, prompt_doc)
 
     response = await llm.generate_with_retry(
         system_prompt=str(prompt_doc.get("system_prompt", "")),
@@ -365,6 +488,7 @@ async def _run_link_summary(
         user_prompt = user_prompt.replace("{{author}}", str(author or ""))
         user_prompt = user_prompt.replace("{{url}}", str(url or ""))
         user_prompt = user_prompt.replace("{{content}}", content[:4500])
+        user_prompt = build_user_prompt_with_output_format(user_prompt, prompt_doc)
 
         response = await llm.generate_with_retry(
             system_prompt=str(prompt_doc.get("system_prompt", "")),
@@ -422,6 +546,7 @@ async def _run_web_research(
         user_prompt = user_prompt.replace("{{title}}", str(title or ""))
         user_prompt = user_prompt.replace("{{author}}", str(author or ""))
         user_prompt = user_prompt.replace("{{sources}}", sources_text[:16000])
+        user_prompt = build_user_prompt_with_output_format(user_prompt, prompt_doc)
 
         response = await llm.generate_with_retry(
             system_prompt=str(prompt_doc.get("system_prompt", "")),
@@ -529,7 +654,8 @@ def scrape_amazon_task(self, submission_id: str, amazon_url: str) -> Dict[str, A
             },
         )
 
-        process_additional_links_task.delay(submission_id=submission_id)
+        next_delay = await _get_step_delay_seconds("amazon_scrape")
+        _enqueue_task(process_additional_links_task, next_delay, submission_id=submission_id)
         return {"status": "ok", "book_id": book_id}
 
     return asyncio.run(_run())
@@ -581,7 +707,8 @@ def process_additional_links_task(self, submission_id: str) -> Dict[str, Any]:
                     "links_processed": 0,
                 },
             )
-            consolidate_bibliographic_task.delay(submission_id=submission_id)
+            next_delay = await _get_step_delay_seconds("summarize_additional_links")
+            _enqueue_task(consolidate_bibliographic_task, next_delay, submission_id=submission_id)
             return {"status": "ok", "links_total": 0, "links_processed": 0}
 
         finder = LinkFinder()
@@ -651,7 +778,8 @@ def process_additional_links_task(self, submission_id: str) -> Dict[str, Any]:
             },
         )
 
-        consolidate_bibliographic_task.delay(submission_id=submission_id)
+        next_delay = await _get_step_delay_seconds("summarize_additional_links")
+        _enqueue_task(consolidate_bibliographic_task, next_delay, submission_id=submission_id)
         return {"status": "ok", "links_total": len(links), "links_processed": processed}
 
     return asyncio.run(_run())
@@ -706,7 +834,8 @@ def consolidate_bibliographic_task(self, submission_id: str) -> Dict[str, Any]:
             {"current_step": "internet_research"},
         )
 
-        internet_research_task.delay(submission_id=submission_id)
+        next_delay = await _get_step_delay_seconds("consolidate_book_data")
+        _enqueue_task(internet_research_task, next_delay, submission_id=submission_id)
         return {"status": "ok", "consolidated_sources_count": len(candidates)}
 
     return asyncio.run(_run())
@@ -799,7 +928,8 @@ def internet_research_task(self, submission_id: str) -> Dict[str, Any]:
             SubmissionStatus.CONTEXT_GENERATION,
             {"current_step": "context_generation"},
         )
-        generate_context_task.delay(submission_id=submission_id)
+        next_delay = await _get_step_delay_seconds("internet_research")
+        _enqueue_task(generate_context_task, next_delay, submission_id=submission_id)
 
         return {"status": "ok", "sources_count": len(source_blobs)}
 
@@ -863,6 +993,8 @@ def generate_context_task(self, submission_id: str) -> Dict[str, Any]:
                 user_prompt += "\n\nExternal summaries:\n"
                 for item in summaries:
                     user_prompt += f"- {item.get('source_url')}: {item.get('summary_text')}\n"
+
+            user_prompt = build_user_prompt_with_output_format(user_prompt, prompt)
 
             try:
                 llm = LLMClient()

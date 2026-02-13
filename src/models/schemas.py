@@ -170,6 +170,7 @@ class PromptCreate(BaseModel):
     model_id: str
     temperature: float = Field(0.7, ge=0, le=2)
     max_tokens: int = Field(2000, ge=1)
+    expected_output_format: Optional[str] = None
     schema_example: Optional[str] = None
     active: bool = True
 
@@ -185,6 +186,7 @@ class PromptUpdate(BaseModel):
     model_id: Optional[str] = None
     temperature: Optional[float] = Field(None, ge=0, le=2)
     max_tokens: Optional[int] = Field(None, ge=1)
+    expected_output_format: Optional[str] = None
     schema_example: Optional[str] = None
     active: Optional[bool] = None
 
@@ -201,6 +203,7 @@ class PromptResponse(BaseModel):
     model_id: str
     temperature: float
     max_tokens: int
+    expected_output_format: Optional[str] = None
     schema_example: Optional[str] = None
     active: bool = True
     created_at: datetime

@@ -10,6 +10,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from src.workers.llm_client import LLMClient
+from src.workers.prompt_builder import build_user_prompt_with_output_format
 
 
 class LinkFinder:
@@ -98,9 +99,31 @@ class LinkFinder:
         if not prompt_doc:
             prompt_doc = {
                 "system_prompt": (
-                    "You summarize web pages for editorial research. Return concise Markdown plus topics and key points."
+                    "You summarize web pages for editorial research. "
+                    "Respond in Portuguese (pt-BR) and return strict JSON only."
                 ),
-                "user_prompt": "Summarize this content for '{title}':\n\n{content}",
+                "user_prompt": (
+                    "Task: summarize the source content for editorial research about the book.\n"
+                    "Book title: {title}\n\n"
+                    "Source content:\n{content}\n\n"
+                    "Return only the JSON object in Portuguese (pt-BR)."
+                ),
+                "expected_output_format": (
+                    "{\n"
+                    '  "summary": "string",\n'
+                    '  "topics": ["string"],\n'
+                    '  "key_points": ["string"],\n'
+                    '  "credibility": "alta|media|baixa"\n'
+                    "}"
+                ),
+                "schema_example": (
+                    "{\n"
+                    '  "summary": "Resumo objetivo do conteúdo com foco editorial.",\n'
+                    '  "topics": ["tema 1", "tema 2"],\n'
+                    '  "key_points": ["Ponto-chave 1", "Ponto-chave 2"],\n'
+                    '  "credibility": "media"\n'
+                    "}"
+                ),
                 "model_id": "gpt-4o-mini",
                 "temperature": 0.4,
                 "max_tokens": 500,
@@ -111,6 +134,7 @@ class LinkFinder:
         user_prompt = user_prompt.replace("{title}", title)
         user_prompt = user_prompt.replace("{{content}}", content[:2500])
         user_prompt = user_prompt.replace("{content}", content[:2500])
+        user_prompt = build_user_prompt_with_output_format(user_prompt, prompt_doc)
 
         llm = LLMClient()
         try:

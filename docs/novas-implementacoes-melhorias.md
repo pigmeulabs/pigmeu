@@ -56,6 +56,16 @@ Na interface de detalhes de uma tarefa, ao acionar a opção "retry" em qualquer
 Atualmente, na interface de detalhes de uma tarefa, a oção "alterar tarefa" está abrindo um modal para alteração da tarefa. Esse comportamento deverá ser alterado seguindo os requisitos abaixo:
   - Ao solicitar a alteração de uma tarefa, a interface que é exibida deve ser a mesma (ou no mesmo padrão) da interface de inclusão de uma tarefa, carregando os dados da tarefa pertinente.
 
+
+Na interface de detalhes/condiguração de uma pipeline. Inclua um novo campo para informar o tempo de delay que o sistemam deverá aguardar para executar o próximo passo da pipeline. Atualize o comportamento da pipline para utilizar sse dado durante a execussão.
+
+
+Na interface de configuração de pipeline, o recurso de expansão/recolhimento dos subcards de cada stepe deve ser em formato de ícone. Atualmente é textual. Utilize ícones de expandir e recolher adequados, como o exemplo da imagem.
+
+Na interface de edição/cadatro de prompts, inclua umanovo campo para definir o formato de saída esperado (schema json, exemplo etc.). Essa informação deverá utilizada para construir o prompt final enviado para a IA.
+
+
+
 ### MELHORIAS E CORREÇÕES UI/UX
 
 1. Em todas as interfaces onde são exibidos cards, por exemplo: Interface de tarefas, interface de prompts, interface de credenciais, etc.), deverá ser implementado o seguinte recurso:
@@ -64,4 +74,33 @@ Atualmente, na interface de detalhes de uma tarefa, a oção "alterar tarefa" es
 2. Implemente um recurso que recolha e expanda o menu lateral.
 
 
+### ANALISAR E DOCUMENTAR ESTADO ATUAL DO SISTEMA.
 
+Execute uma simulação/rotina de uso exploratório minuciosas em todas as funcionalidades/módulos do sistema, para em seguida responda com uma lista de módulos e funcionalidades existnetes.
+
+Na seuência, mova todo o conteúdo da pasta docs para "docs-deprecated". E inicie a criação da nova documentação atualizada com base na sua analise. Responda listando uma proposta de documentos a serem criados (eles subtituiram toda a documentação atual.).
+
+
+
+
+
+
+
+Crie a interface CRUD de content Schemas, onde deve ser possível realizar a configuração da estrutura/schema que será utilizado durante geração de um artigo (book review atualmente, mas no futuro existiram outros)
+Nela deverá ser possível realizar as seguintes definições e configurações:
+
+- Quantidade mínima e quantidade máxima de palavras total do artigo.
+- Estrutura de Títulos (TOC)
+  - Deve permitir incluir um template de títulos e  subtítulos (h2 e h3).
+    - Permitir definir a quantidade de parágros/palavras em cada um.
+    - Definir se o título/subtítulo possui conteúdo específico (ex.: Dados bibliográficos), ou se ele será gerado dinamicamente.
+    - Definir quais informações do banco de dados serão utilizadas na geração do conteúdo de cada título.
+    - Definir qual prompt dever ser utilizado na geração de cada item.
+- Quantidade de línks internos que devem ser gerados
+- Quantidade de links externos
+
+
+
+
+
+Revise todos os prompts padrão, e reescreva eles com as seguintes indicações: Otimize o formato dos prompts para ser utilziado com modelos de IA através de api. Escreva o prompt em inglês, mas solicite que a resposta seja em portugu^es.  Adicione em cada prompt a informação do modelo/schema de saída esperado. Garanta que essa informação sempre seja utilizada na execussão dos promps.

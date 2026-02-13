@@ -127,7 +127,7 @@
 
                 <section id="submit-section" class="section">
                     <div class="section-header">
-                        <h2>New Task: Book Review Article</h2>
+                        <h2 id="submit-section-title">New Task: Book Review Article</h2>
                     </div>
 
                     <div class="form-container book-review-container">
@@ -140,7 +140,7 @@
                                     </div>
 
                                     <div class="form-group">
-                                        <label for="author_name" class="form-label">Author name *</label>
+                                        <label for="author_name" class="form-label">Author Name *</label>
                                         <input type="text" id="author_name" name="author_name" class="form-input" placeholder="Full book author name" required>
                                     </div>
 
@@ -163,7 +163,7 @@
                                     </div>
 
                                     <div class="form-group">
-                                        <label for="textual_information" class="form-label">Textual information <span class="field-optional">(optional)</span></label>
+                                        <label for="textual_information" class="form-label">Textual Information <span class="field-optional">(optional)</span></label>
                                         <textarea id="textual_information" name="textual_information" class="form-textarea" rows="6"></textarea>
                                     </div>
                                 </div>
@@ -179,7 +179,7 @@
                                     </div>
 
                                     <div class="form-group">
-                                        <label for="schedule_execution" class="form-label">Schedule execution</label>
+                                        <label for="schedule_execution" class="form-label">Schedule Execution</label>
                                         <input type="datetime-local" id="schedule_execution" name="schedule_execution" class="form-input" disabled placeholder="mm/dd/yyyy at hh:mm">
                                     </div>
 
@@ -200,7 +200,7 @@
                                         <select id="article_status" name="article_status" class="form-input">
                                             <option value="">Select status</option>
                                             <option value="draft">Draft</option>
-                                            <option value="in_review">In review</option>
+                                            <option value="in_review">In Review</option>
                                             <option value="approved">Approved</option>
                                             <option value="published">Published</option>
                                         </select>
@@ -214,7 +214,8 @@
                                     </div>
 
                                     <div class="book-review-actions">
-                                        <button type="submit" class="btn btn-primary btn-large">Create Task</button>
+                                        <button id="submit-task-btn" type="submit" class="btn btn-primary btn-large">Create Task</button>
+                                        <button id="cancel-edit-task-btn" type="button" class="btn btn-secondary btn-large" style="display:none">Cancel Edit</button>
                                         <div id="submit-result" class="form-result"></div>
                                     </div>
                                 </div>
@@ -364,7 +365,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="cred-username" class="form-label">Username/email</label>
+                    <label for="cred-username" class="form-label">Username/Email</label>
                     <input type="text" id="cred-username" name="username_email" class="form-input">
                 </div>
 
@@ -376,7 +377,14 @@
                 </label>
 
                 <div class="task-actions">
-                    <button id="credential-save-btn" type="submit" class="btn btn-primary">Save</button>
+                    <button id="credential-save-btn" type="submit" class="btn btn-primary btn-icon-only" aria-label="Save credential" title="Save credential">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                            <path d="M5 3h12l4 4v14H5z"></path>
+                            <path d="M8 3v6h8V3"></path>
+                            <path d="M9 21v-6h6v6"></path>
+                        </svg>
+                        <span class="sr-only">Save credential</span>
+                    </button>
                     <button id="credential-cancel-btn" type="button" class="btn btn-secondary">Cancel</button>
                 </div>
                 <div id="cred-form-result" class="form-result"></div>
@@ -390,7 +398,7 @@
             <h3 id="prompt-modal-title">Create Prompt</h3>
             <form id="prompt-form" class="modal-form">
                 <div class="form-group">
-                    <label for="prompt-name" class="form-label">Prompt name *</label>
+                    <label for="prompt-name" class="form-label">Prompt Name *</label>
                     <input type="text" id="prompt-name" name="name" class="form-input" required>
                 </div>
 
@@ -400,7 +408,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="prompt-short" class="form-label">Short description</label>
+                    <label for="prompt-short" class="form-label">Short Description</label>
                     <input type="text" id="prompt-short" name="short_description" class="form-input">
                 </div>
 
@@ -412,6 +420,11 @@
                 <div class="form-group">
                     <label for="prompt-user" class="form-label">User Prompt *</label>
                     <textarea id="prompt-user" name="user_prompt" class="form-textarea" rows="5" required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="prompt-output-format" class="form-label">Expected Output Format</label>
+                    <textarea id="prompt-output-format" name="expected_output_format" class="form-textarea" rows="4" placeholder="JSON schema, example payload, markdown structure, etc."></textarea>
                 </div>
 
                 <div class="form-row">
@@ -434,7 +447,14 @@
                 </label>
 
                 <div class="task-actions">
-                    <button id="prompt-save-btn" type="submit" class="btn btn-primary">Save</button>
+                    <button id="prompt-save-btn" type="submit" class="btn btn-primary btn-icon-only" aria-label="Save prompt" title="Save prompt">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                            <path d="M5 3h12l4 4v14H5z"></path>
+                            <path d="M8 3v6h8V3"></path>
+                            <path d="M9 21v-6h6v6"></path>
+                        </svg>
+                        <span class="sr-only">Save prompt</span>
+                    </button>
                     <button id="prompt-cancel-btn" type="button" class="btn btn-secondary">Cancel</button>
                 </div>
                 <div id="prompt-form-result" class="form-result"></div>
@@ -453,7 +473,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="task-edit-author-name" class="form-label">Author name *</label>
+                    <label for="task-edit-author-name" class="form-label">Author Name *</label>
                     <input type="text" id="task-edit-author-name" class="form-input" required>
                 </div>
 
@@ -468,7 +488,7 @@
                         <input type="url" id="task-edit-goodreads-url" class="form-input">
                     </div>
                     <div class="form-group">
-                        <label for="task-edit-author-site" class="form-label">Author site</label>
+                        <label for="task-edit-author-site" class="form-label">Author Site</label>
                         <input type="url" id="task-edit-author-site" class="form-input">
                     </div>
                 </div>
@@ -479,7 +499,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="task-edit-textual-information" class="form-label">Textual information</label>
+                    <label for="task-edit-textual-information" class="form-label">Textual Information</label>
                     <textarea id="task-edit-textual-information" class="form-textarea" rows="4"></textarea>
                 </div>
 
@@ -493,7 +513,7 @@
                         <select id="task-edit-article-status" class="form-input">
                             <option value="">Select</option>
                             <option value="draft">Draft</option>
-                            <option value="in_review">In review</option>
+                            <option value="in_review">In Review</option>
                             <option value="approved">Approved</option>
                         </select>
                     </div>
@@ -505,7 +525,7 @@
                 </label>
 
                 <div class="form-group">
-                    <label for="task-edit-schedule-execution" class="form-label">Schedule execution</label>
+                    <label for="task-edit-schedule-execution" class="form-label">Schedule Execution</label>
                     <input type="datetime-local" id="task-edit-schedule-execution" class="form-input" disabled>
                 </div>
 
@@ -515,7 +535,14 @@
                 </label>
 
                 <div class="task-actions">
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <button type="submit" class="btn btn-primary btn-icon-only" aria-label="Save task changes" title="Save task changes">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                            <path d="M5 3h12l4 4v14H5z"></path>
+                            <path d="M8 3v6h8V3"></path>
+                            <path d="M9 21v-6h6v6"></path>
+                        </svg>
+                        <span class="sr-only">Save task changes</span>
+                    </button>
                     <button id="task-edit-cancel-btn" type="button" class="btn btn-secondary">Cancel</button>
                 </div>
                 <div id="task-edit-result" class="form-result"></div>

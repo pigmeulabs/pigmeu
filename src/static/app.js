@@ -3,6 +3,9 @@ const sections = document.querySelectorAll('.section');
 
 const submitForm = document.getElementById('submit-form');
 const submitResult = document.getElementById('submit-result');
+const submitSectionTitle = document.getElementById('submit-section-title');
+const submitTaskBtn = document.getElementById('submit-task-btn');
+const cancelEditTaskBtn = document.getElementById('cancel-edit-task-btn');
 
 const credForm = document.getElementById('cred-form');
 const credResult = document.getElementById('cred-result');
@@ -55,6 +58,8 @@ let skip = 0;
 const limit = 10;
 let currentTaskId = null;
 let currentTaskDetails = null;
+let editingTaskId = null;
+let editingTaskBaseSubmission = null;
 let searchDebounceTimer = null;
 let editingCredentialId = null;
 let editingPromptId = null;
@@ -77,6 +82,66 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function getActionIconSvg(action) {
+  const icons = {
+    edit: `
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M12 20h9"></path>
+        <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+      </svg>
+    `,
+    delete: `
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M3 6h18"></path>
+        <path d="M8 6V4h8v2"></path>
+        <path d="M19 6l-1 14H6L5 6"></path>
+        <path d="M10 11v6"></path>
+        <path d="M14 11v6"></path>
+      </svg>
+    `,
+    toggle: `
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M12 2v10"></path>
+        <path d="M5.6 5.6a9 9 0 1 0 12.8 0"></path>
+      </svg>
+    `,
+    configure: `
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M4 21v-7"></path>
+        <path d="M4 10V3"></path>
+        <path d="M12 21v-9"></path>
+        <path d="M12 8V3"></path>
+        <path d="M20 21v-5"></path>
+        <path d="M20 12V3"></path>
+        <circle cx="4" cy="12" r="2"></circle>
+        <circle cx="12" cy="10" r="2"></circle>
+        <circle cx="20" cy="14" r="2"></circle>
+      </svg>
+    `,
+    save: `
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M5 3h12l4 4v14H5z"></path>
+        <path d="M8 3v6h8V3"></path>
+        <path d="M9 21v-6h6v6"></path>
+      </svg>
+    `,
+  };
+  return icons[action] || icons.configure;
+}
+
+function renderIconActionContent(action, label) {
+  const safeLabel = escapeHtml(label || action || 'action');
+  return `${getActionIconSvg(action)}<span class="sr-only">${safeLabel}</span>`;
+}
+
+function setIconButtonContent(button, action, label) {
+  if (!button) return;
+  button.classList.add('btn-icon-only');
+  button.innerHTML = renderIconActionContent(action, label);
+  button.setAttribute('aria-label', label);
+  button.setAttribute('title', label);
 }
 
 function parseApiError(payload, fallback = 'Request failed') {
@@ -249,6 +314,16 @@ function closeOverlayModal(modalEl) {
   if (modalEl) modalEl.classList.remove('active');
 }
 
+function applyStaticActionIcons() {
+  const credentialSaveBtn = document.getElementById('credential-save-btn');
+  const promptSaveBtn = document.getElementById('prompt-save-btn');
+  const taskEditSaveBtn = document.querySelector('#task-edit-form button[type="submit"]');
+
+  setIconButtonContent(credentialSaveBtn, 'save', 'Save credential');
+  setIconButtonContent(promptSaveBtn, 'save', 'Save prompt');
+  setIconButtonContent(taskEditSaveBtn, 'save', 'Save task changes');
+}
+
 function markdownToHtml(markdown) {
   const lines = String(markdown || '').split('\n');
   let html = '';
@@ -371,7 +446,14 @@ function renderTaskCard(task) {
       <span class="task-status ${statusClass(task.status)}">${escapeHtml(statusLabel(task.status))}</span>
       <div class="task-card-meta-actions">
         <span class="text-muted small">${formatDate(task.updated_at)}</span>
-        <button type="button" class="btn btn-danger btn-xs task-card-delete-btn">Delete</button>
+        <button
+          type="button"
+          class="btn btn-danger btn-xs btn-icon-only task-card-delete-btn"
+          aria-label="Delete task"
+          title="Delete task"
+        >
+          ${renderIconActionContent('delete', 'Delete task')}
+        </button>
       </div>
     </div>
   `;
@@ -687,15 +769,20 @@ function buildTaskFlowSteps(taskData) {
 
   const currentStep = mapCurrentTaskStep(submission);
   const currentIndex = TASK_FLOW_DEFINITION.findIndex((step) => step.id === currentStep);
+  const isFailed = ['scraping_failed', 'failed'].includes(status);
 
   if (currentIndex >= 0) {
     for (let i = 0; i < currentIndex; i += 1) {
       const prevId = TASK_FLOW_DEFINITION[i].id;
       if (states[prevId] === 'to_do') states[prevId] = 'processed';
     }
+
+    // If the pipeline is executing/retrying from a given step, all next steps must return to To Do.
+    for (let i = currentIndex + 1; i < TASK_FLOW_DEFINITION.length; i += 1) {
+      states[TASK_FLOW_DEFINITION[i].id] = 'to_do';
+    }
   }
 
-  const isFailed = ['scraping_failed', 'failed'].includes(status);
   if (isFailed && currentStep) {
     states[currentStep] = 'failed';
   } else if (currentStep && states[currentStep] === 'to_do') {
@@ -709,10 +796,10 @@ function buildTaskFlowSteps(taskData) {
 }
 
 function getFlowStatusLabel(state) {
-  if (state === 'processed') return 'processed';
-  if (state === 'failed') return 'failed';
-  if (state === 'current') return 'processing';
-  return 'to do';
+  if (state === 'processed') return 'Processed';
+  if (state === 'failed') return 'Failed';
+  if (state === 'current') return 'Current';
+  return 'To Do';
 }
 
 function renderTaskProgressTimeline(flowSteps = []) {
@@ -765,10 +852,10 @@ function renderStepDetails(flowSteps = [], taskData = null) {
               <div class="steps-actions">
                 <span class="step-state-badge state-${step.state}">${escapeHtml(statusText)}</span>
                 <button type="button" class="btn btn-secondary btn-xs step-action-reprocess" data-step-stage="${escapeHtml(step.id)}" ${canReprocess ? '' : 'disabled'}>
-                  retry
+                  Retry
                 </button>
                 <button type="button" class="btn btn-secondary btn-xs step-action-view" data-step-stage="${escapeHtml(step.id)}" ${canView ? '' : 'disabled'}>
-                  view content
+                  View Content
                 </button>
               </div>
             </div>
@@ -779,29 +866,52 @@ function renderStepDetails(flowSteps = [], taskData = null) {
   `;
 }
 
-function renderTaskDetails(data) {
+function buildFlowStepsAfterRetry(taskData, retryStage) {
+  const flowSteps = buildTaskFlowSteps(taskData).map((step) => ({ ...step }));
+  const retryIndex = TASK_FLOW_DEFINITION.findIndex((step) => step.id === retryStage);
+  if (retryIndex < 0) return flowSteps;
+
+  flowSteps.forEach((step, idx) => {
+    if (idx > retryIndex) step.state = 'to_do';
+  });
+
+  if (flowSteps[retryIndex]) {
+    flowSteps[retryIndex].state = 'current';
+  }
+
+  return flowSteps;
+}
+
+function renderTaskDetails(data, flowStepsOverride = null) {
   const submission = data.submission || {};
-  const flowSteps = buildTaskFlowSteps(data);
+  const flowSteps =
+    Array.isArray(flowStepsOverride) && flowStepsOverride.length > 0
+      ? flowStepsOverride
+      : buildTaskFlowSteps(data);
 
   return `
     <div class="task-details-container">
       <div class="task-details-top">
         <h3 class="task-details-title">Task Details: Book Review</h3>
         <div class="task-details-top-actions">
-          <button id="action-edit-task" class="btn btn-primary" type="button">Edit Task</button>
-          <button id="action-delete-task" class="btn btn-danger" type="button">Delete</button>
+          <button id="action-edit-task" class="btn btn-primary btn-icon-only" type="button" aria-label="Edit task" title="Edit task">
+            ${renderIconActionContent('edit', 'Edit task')}
+          </button>
+          <button id="action-delete-task" class="btn btn-danger btn-icon-only" type="button" aria-label="Delete task" title="Delete task">
+            ${renderIconActionContent('delete', 'Delete task')}
+          </button>
         </div>
       </div>
       <div class="task-details-divider"></div>
 
       <div class="task-meta-grid">
         <div class="task-meta-col">
-          <p class="task-meta-line"><strong>Books:</strong> ${escapeHtml(submission.title || '-')}</p>
+          <p class="task-meta-line"><strong>Book:</strong> ${escapeHtml(submission.title || '-')}</p>
           <p class="task-meta-line"><strong>Created:</strong> ${formatDate(submission.created_at)}</p>
         </div>
         <div class="task-meta-col">
           <p class="task-meta-line"><strong>Author:</strong> ${escapeHtml(submission.author_name || '-')}</p>
-          <p class="task-meta-line"><strong>Last update:</strong> ${formatDate(submission.updated_at)}</p>
+          <p class="task-meta-line"><strong>Last Update:</strong> ${formatDate(submission.updated_at)}</p>
         </div>
       </div>
 
@@ -859,7 +969,7 @@ function wireTaskActions(taskId, taskData) {
 
   if (editTaskBtn) {
     editTaskBtn.addEventListener('click', () => {
-      openTaskEditModal(taskData?.submission || {});
+      openTaskEditOnSubmitForm(taskId, taskData?.submission || {});
     });
   }
 
@@ -890,13 +1000,19 @@ function wireTaskActions(taskId, taskData) {
 
       const stepLabel = button.closest('.steps-row')?.querySelector('.steps-name')?.textContent?.trim() || stage;
       const confirmed = confirm(
-        `Ao reprocessar o passo "${stepLabel}", todos os demais passos já executados serão perdidos e executados novamente.\n\nDeseja continuar?`
+        `Retrying step "${stepLabel}" will discard all later completed steps and run them again.\n\nDo you want to continue?`
       );
       if (!confirmed) return;
 
       try {
         button.disabled = true;
         await executeTaskAction(config.url, config.method || 'POST', config.payload || null);
+
+        // Optimistic UI update: keep retried step as current and reset all next steps to To Do.
+        const flowStepsAfterRetry = buildFlowStepsAfterRetry(taskData, stage);
+        setTaskDetailsContent(renderTaskDetails(taskData, flowStepsAfterRetry));
+        wireTaskActions(taskId, taskData);
+
         showTaskActionResult(config.successMessage);
         setTimeout(() => fetchTaskDetails(taskId), 1000);
       } catch (err) {
@@ -1012,6 +1128,106 @@ function updateScheduleState() {
   scheduleInput.disabled = runNow;
   scheduleInput.required = !runNow;
   if (runNow) scheduleInput.value = '';
+}
+
+function setSubmitFormMode(editing) {
+  if (submitSectionTitle) {
+    submitSectionTitle.textContent = editing ? 'Edit Task: Book Review Article' : 'New Task: Book Review Article';
+  }
+  if (submitTaskBtn) {
+    if (editing) {
+      setIconButtonContent(submitTaskBtn, 'save', 'Save task changes');
+    } else {
+      submitTaskBtn.classList.remove('btn-icon-only');
+      submitTaskBtn.textContent = 'Create Task';
+      submitTaskBtn.setAttribute('aria-label', 'Create task');
+      submitTaskBtn.setAttribute('title', 'Create task');
+    }
+  }
+  if (cancelEditTaskBtn) {
+    cancelEditTaskBtn.style.display = editing ? 'inline-flex' : 'none';
+  }
+}
+
+function clearSubmitEditMode() {
+  editingTaskId = null;
+  editingTaskBaseSubmission = null;
+  setSubmitFormMode(false);
+}
+
+function readSubmitOtherLinks() {
+  if (!otherLinksContainer) return [];
+  return Array.from(otherLinksContainer.querySelectorAll('.other-link'))
+    .map((input) => input.value.trim())
+    .filter((url) => url);
+}
+
+function fillSubmitFormFromSubmission(submission = {}) {
+  const titleInput = document.getElementById('title');
+  const authorInput = document.getElementById('author_name');
+  const amazonInput = document.getElementById('amazon_url');
+  const textualInfoInput = document.getElementById('textual_information');
+  const mainCategoryInput = document.getElementById('main_category');
+  const articleStatusInput = document.getElementById('article_status');
+  const userApprovalInput = document.getElementById('user_approval_required');
+
+  if (titleInput) titleInput.value = submission.title || '';
+  if (authorInput) authorInput.value = submission.author_name || '';
+  if (amazonInput) amazonInput.value = submission.amazon_url || '';
+  if (textualInfoInput) textualInfoInput.value = submission.textual_information || '';
+  if (mainCategoryInput) mainCategoryInput.value = submission.main_category || '';
+  if (articleStatusInput) articleStatusInput.value = submission.article_status || '';
+  if (runImmediatelyInput) runImmediatelyInput.checked = submission.run_immediately !== false;
+  if (scheduleInput) scheduleInput.value = toDatetimeLocalValue(submission.schedule_execution);
+  if (userApprovalInput) userApprovalInput.checked = !!submission.user_approval_required;
+
+  if (otherLinksContainer) {
+    const links = Array.isArray(submission.other_links) ? submission.other_links : [];
+    otherLinksContainer.innerHTML = '';
+    if (links.length === 0) {
+      otherLinksContainer.appendChild(createOtherLinkInput());
+    } else {
+      links.forEach((link) => otherLinksContainer.appendChild(createOtherLinkInput(link)));
+    }
+    updateOtherLinksUiState();
+  }
+
+  updateScheduleState();
+}
+
+function openTaskEditOnSubmitForm(taskId, submission = {}) {
+  if (!submitForm || !taskId) return;
+
+  editingTaskId = taskId;
+  editingTaskBaseSubmission = { ...submission };
+  setSubmitFormMode(true);
+  fillSubmitFormFromSubmission(submission);
+  showSection('submit-section');
+
+  if (submitResult) {
+    submitResult.className = 'form-result';
+    submitResult.textContent = '';
+  }
+}
+
+function collectSubmitEditPayload(baseSubmission = {}) {
+  const payload = collectSubmitPayload();
+  const otherLinks = readSubmitOtherLinks();
+
+  return {
+    title: payload.title,
+    author_name: payload.author_name,
+    amazon_url: payload.amazon_url,
+    goodreads_url: baseSubmission.goodreads_url || null,
+    author_site: baseSubmission.author_site || null,
+    other_links: otherLinks,
+    textual_information: payload.textual_information || null,
+    run_immediately: payload.run_immediately,
+    schedule_execution: payload.run_immediately ? null : toIsoDateTime(payload.schedule_execution),
+    main_category: payload.main_category || null,
+    article_status: payload.article_status || null,
+    user_approval_required: payload.user_approval_required,
+  };
 }
 
 function updateTaskEditScheduleState() {
@@ -1199,33 +1415,49 @@ function collectSubmitPayload() {
 if (submitForm) {
   submitForm.addEventListener('submit', async (event) => {
     event.preventDefault();
-    submitResult.textContent = 'Enviando...';
+    const isEditing = !!editingTaskId;
+    const targetTaskId = editingTaskId;
+
+    submitResult.textContent = isEditing ? 'Saving changes...' : 'Submitting...';
     submitResult.className = 'form-result';
 
     try {
-      const payload = collectSubmitPayload();
-      const response = await fetch('/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      if (isEditing) {
+        const submissionPayload = collectSubmitEditPayload(editingTaskBaseSubmission || {});
+        await executeTaskAction(`/tasks/${targetTaskId}`, 'PATCH', { submission: submissionPayload });
 
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(parseApiError(data, 'Failed to submit task'));
+        submitResult.className = 'form-result success';
+        submitResult.textContent = 'Task updated successfully.';
+      } else {
+        const payload = collectSubmitPayload();
+        const response = await fetch('/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
 
-      submitResult.className = 'form-result success';
-      submitResult.textContent = `Task created successfully: ${data.id}`;
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(parseApiError(data, 'Failed to submit task'));
+
+        submitResult.className = 'form-result success';
+        submitResult.textContent = `Task created successfully: ${data.id}`;
+      }
 
       submitForm.reset();
       updateScheduleState();
       resetSubmitFormLinks();
+      clearSubmitEditMode();
+
+      if (targetTaskId && targetTaskId === currentTaskId) {
+        fetchTaskDetails(targetTaskId);
+      }
 
       skip = 0;
       fetchTasks();
       fetchStats();
     } catch (err) {
       submitResult.className = 'form-result error';
-      submitResult.textContent = normalizeError(err, 'Failed to submit task');
+      submitResult.textContent = normalizeError(err, isEditing ? 'Failed to update task' : 'Failed to submit task');
     }
   });
 }
@@ -1277,7 +1509,7 @@ if (taskEditRunImmediatelyInput) {
 function setCredentialFormMode(editing) {
   const submitButton = credForm?.querySelector('button[type="submit"]');
   if (credentialModalTitle) credentialModalTitle.textContent = editing ? 'Edit Credential' : 'Create Credential';
-  if (submitButton) submitButton.textContent = editing ? 'Save Changes' : 'Save';
+  if (submitButton) setIconButtonContent(submitButton, 'save', editing ? 'Save credential changes' : 'Save credential');
 }
 
 function resetCredentialForm() {
@@ -1340,9 +1572,15 @@ function renderCredentialItem(credential) {
       <span class="task-status ${active ? 'status-success' : 'status-warning'}">${status}</span>
     </div>
     <div class="item-actions">
-      <button type="button" class="btn btn-secondary btn-xs" data-action="edit">Edit</button>
-      <button type="button" class="btn btn-secondary btn-xs" data-action="toggle">${active ? 'Deactivate' : 'Activate'}</button>
-      <button type="button" class="btn btn-secondary btn-xs" data-action="delete">Delete</button>
+      <button type="button" class="btn btn-secondary btn-xs btn-icon-only" data-action="edit" aria-label="Edit credential" title="Edit credential">
+        ${renderIconActionContent('edit', 'Edit credential')}
+      </button>
+      <button type="button" class="btn btn-secondary btn-xs btn-icon-only" data-action="toggle" aria-label="${active ? 'Deactivate credential' : 'Activate credential'}" title="${active ? 'Deactivate credential' : 'Activate credential'}">
+        ${renderIconActionContent('toggle', active ? 'Deactivate credential' : 'Activate credential')}
+      </button>
+      <button type="button" class="btn btn-secondary btn-xs btn-icon-only" data-action="delete" aria-label="Delete credential" title="Delete credential">
+        ${renderIconActionContent('delete', 'Delete credential')}
+      </button>
     </div>
   `;
 
@@ -1514,7 +1752,7 @@ if (credForm) {
 function setPromptFormMode(editing) {
   const submitButton = promptForm?.querySelector('button[type="submit"]');
   if (promptModalTitle) promptModalTitle.textContent = editing ? 'Edit Prompt' : 'Create Prompt';
-  if (submitButton) submitButton.textContent = editing ? 'Save Changes' : 'Save';
+  if (submitButton) setIconButtonContent(submitButton, 'save', editing ? 'Save prompt changes' : 'Save prompt');
 }
 
 function resetPromptForm() {
@@ -1548,6 +1786,7 @@ function openPromptModal(prompt = null) {
     promptForm.querySelector('#prompt-short').value = prompt.short_description || '';
     promptForm.querySelector('#prompt-system').value = prompt.system_prompt || '';
     promptForm.querySelector('#prompt-user').value = prompt.user_prompt || '';
+    promptForm.querySelector('#prompt-output-format').value = prompt.expected_output_format || prompt.schema_example || '';
     promptForm.querySelector('#prompt-model').value = prompt.model_id || 'gpt-4o-mini';
     promptForm.querySelector('#prompt-temp').value = String(prompt.temperature ?? 0.7);
     promptForm.querySelector('#prompt-tokens').value = String(prompt.max_tokens ?? 800);
@@ -1580,9 +1819,15 @@ function renderPromptItem(prompt) {
       <span class="task-status ${active ? 'status-success' : 'status-warning'}">${active ? 'Active' : 'Inactive'}</span>
     </div>
     <div class="item-actions">
-      <button type="button" class="btn btn-secondary btn-xs" data-action="edit">Edit</button>
-      <button type="button" class="btn btn-secondary btn-xs" data-action="toggle">${active ? 'Deactivate' : 'Activate'}</button>
-      <button type="button" class="btn btn-secondary btn-xs" data-action="delete">Delete</button>
+      <button type="button" class="btn btn-secondary btn-xs btn-icon-only" data-action="edit" aria-label="Edit prompt" title="Edit prompt">
+        ${renderIconActionContent('edit', 'Edit prompt')}
+      </button>
+      <button type="button" class="btn btn-secondary btn-xs btn-icon-only" data-action="toggle" aria-label="${active ? 'Deactivate prompt' : 'Activate prompt'}" title="${active ? 'Deactivate prompt' : 'Activate prompt'}">
+        ${renderIconActionContent('toggle', active ? 'Deactivate prompt' : 'Activate prompt')}
+      </button>
+      <button type="button" class="btn btn-secondary btn-xs btn-icon-only" data-action="delete" aria-label="Delete prompt" title="Delete prompt">
+        ${renderIconActionContent('delete', 'Delete prompt')}
+      </button>
     </div>
   `;
 
@@ -1696,6 +1941,7 @@ if (promptForm) {
       short_description: promptForm.querySelector('#prompt-short')?.value.trim() || undefined,
       system_prompt: promptForm.querySelector('#prompt-system')?.value,
       user_prompt: promptForm.querySelector('#prompt-user')?.value,
+      expected_output_format: promptForm.querySelector('#prompt-output-format')?.value.trim() || undefined,
       model_id: promptForm.querySelector('#prompt-model')?.value.trim() || 'gpt-4o-mini',
       temperature: parseFloat(promptForm.querySelector('#prompt-temp')?.value || '0.7'),
       max_tokens: parseInt(promptForm.querySelector('#prompt-tokens')?.value || '800', 10),
@@ -1769,7 +2015,9 @@ async function fetchPipelines() {
           <span><strong>AI Steps:</strong> ${escapeHtml(pipeline.ai_steps_count || 0)}</span>
         </div>
         <div class="pipeline-card-actions">
-          <button type="button" class="btn btn-primary">Configure</button>
+          <button type="button" class="btn btn-primary btn-icon-only" aria-label="Configure pipeline" title="Configure pipeline">
+            ${renderIconActionContent('configure', 'Configure pipeline')}
+          </button>
         </div>
       `;
 
@@ -1823,6 +2071,7 @@ function renderPipelineDetails(details) {
   const stepsHtml = steps
     .map((step) => {
       const ai = step?.ai || {};
+      const delaySeconds = Math.max(0, Number.parseInt(step?.delay_seconds ?? 0, 10) || 0);
       const provider = String(ai.provider || '').toLowerCase();
       const preferredCredentials = availableCredentials.filter(
         (item) => String(item.service || '').toLowerCase() === provider
@@ -1851,47 +2100,85 @@ function renderPipelineDetails(details) {
         : 'No default prompt';
 
       return `
-        <article class="pipeline-step-card">
+        <article class="pipeline-step-card is-collapsed">
           <div class="pipeline-step-header">
             <h4>${escapeHtml(step.name || step.id || '-')}</h4>
-            <span class="task-status ${step.uses_ai ? 'status-info' : 'status-warning'}">${step.uses_ai ? 'AI' : 'System'}</span>
+            <div class="pipeline-step-header-actions">
+              <span class="task-status ${step.uses_ai ? 'status-info' : 'status-warning'}">${step.uses_ai ? 'AI' : 'System'}</span>
+              <button
+                type="button"
+                class="pipeline-step-toggle-btn"
+                data-step-id="${escapeHtml(step.id)}"
+                aria-expanded="false"
+                aria-label="Expand step"
+                title="Expand step"
+              >
+                <svg class="icon-expand" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M14 10L21 3M16 3h5v5M10 14L3 21M3 16v5h5"></path>
+                </svg>
+                <svg class="icon-collapse" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M21 3l-7 7M16 10h5V5M3 21l7-7M8 14H3v5"></path>
+                </svg>
+              </button>
+            </div>
           </div>
-          <p class="text-muted">${escapeHtml(step.description || '')}</p>
-          <div class="pipeline-step-meta">
-            <span><strong>ID:</strong> ${escapeHtml(step.id || '-')}</span>
-            <span><strong>Usage Type:</strong> ${escapeHtml(step.type || '-')}</span>
-          </div>
-          ${
-            step.uses_ai
-              ? `
-            <div class="pipeline-ai-panel">
-              <div class="pipeline-step-meta">
-                <span><strong>Provider:</strong> ${escapeHtml(ai.provider || '-')}</span>
-                <span><strong>Model:</strong> ${escapeHtml(ai.model_id || '-')}</span>
-              </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label class="form-label">Credential</label>
-                  <select class="form-input pipeline-credential-select" data-step-id="${escapeHtml(step.id)}">
-                    <option value="">${escapeHtml(credentialDefaultLabel)}</option>
-                    ${credentialOptions}
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Prompt</label>
-                  <select class="form-input pipeline-prompt-select" data-step-id="${escapeHtml(step.id)}">
-                    <option value="">${escapeHtml(promptDefaultLabel)}</option>
-                    ${promptOptions}
-                  </select>
-                </div>
-              </div>
-              <div class="task-actions">
-                <button type="button" class="btn btn-primary pipeline-step-save-btn" data-step-id="${escapeHtml(step.id)}">Save Configuration</button>
+          <div class="pipeline-step-body">
+            <p class="text-muted">${escapeHtml(step.description || '')}</p>
+            <div class="pipeline-step-meta">
+              <span><strong>ID:</strong> ${escapeHtml(step.id || '-')}</span>
+              <span><strong>Usage Type:</strong> ${escapeHtml(step.type || '-')}</span>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Step Delay (seconds)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  class="form-input pipeline-delay-input"
+                  data-step-id="${escapeHtml(step.id)}"
+                  value="${delaySeconds}"
+                >
               </div>
             </div>
-          `
-              : ''
-          }
+            ${step.uses_ai
+              ? `
+              <div class="pipeline-ai-panel">
+                <div class="pipeline-step-meta">
+                  <span><strong>Provider:</strong> ${escapeHtml(ai.provider || '-')}</span>
+                  <span><strong>Model:</strong> ${escapeHtml(ai.model_id || '-')}</span>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Credential</label>
+                    <select class="form-input pipeline-credential-select" data-step-id="${escapeHtml(step.id)}">
+                      <option value="">${escapeHtml(credentialDefaultLabel)}</option>
+                      ${credentialOptions}
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Prompt</label>
+                    <select class="form-input pipeline-prompt-select" data-step-id="${escapeHtml(step.id)}">
+                      <option value="">${escapeHtml(promptDefaultLabel)}</option>
+                      ${promptOptions}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            `
+              : ''}
+            <div class="task-actions">
+              <button
+                type="button"
+                class="btn btn-primary btn-icon-only pipeline-step-save-btn"
+                data-step-id="${escapeHtml(step.id)}"
+                aria-label="Save step configuration"
+                title="Save step configuration"
+              >
+                ${renderIconActionContent('save', 'Save step configuration')}
+              </button>
+            </div>
+          </div>
         </article>
       `;
     })
@@ -1910,7 +2197,25 @@ function renderPipelineDetails(details) {
   `;
 }
 
+function wirePipelineStepToggles() {
+  const toggleButtons = document.querySelectorAll('.pipeline-step-toggle-btn');
+  toggleButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const card = button.closest('.pipeline-step-card');
+      if (!card) return;
+
+      card.classList.toggle('is-collapsed');
+      const collapsed = card.classList.contains('is-collapsed');
+      button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      button.setAttribute('aria-label', collapsed ? 'Expand step' : 'Collapse step');
+      button.setAttribute('title', collapsed ? 'Expand step' : 'Collapse step');
+    });
+  });
+}
+
 function wirePipelineDetailsActions(pipelineId) {
+  wirePipelineStepToggles();
+
   const saveButtons = document.querySelectorAll('.pipeline-step-save-btn');
   saveButtons.forEach((button) => {
     button.addEventListener('click', async () => {
@@ -1920,11 +2225,24 @@ function wirePipelineDetailsActions(pipelineId) {
       const row = button.closest('.pipeline-step-card');
       const credentialSelect = row?.querySelector('.pipeline-credential-select');
       const promptSelect = row?.querySelector('.pipeline-prompt-select');
+      const delayInput = row?.querySelector('.pipeline-delay-input');
+
+      const delayRaw = delayInput?.value ?? '0';
+      const delaySeconds = Number.parseInt(delayRaw, 10);
+      if (Number.isNaN(delaySeconds) || delaySeconds < 0) {
+        setPipelinesResult('Step delay must be an integer >= 0.', true);
+        return;
+      }
 
       const payload = {
-        credential_id: credentialSelect?.value ? String(credentialSelect.value) : null,
-        prompt_id: promptSelect?.value ? String(promptSelect.value) : null,
+        delay_seconds: delaySeconds,
       };
+      if (credentialSelect) {
+        payload.credential_id = credentialSelect.value ? String(credentialSelect.value) : null;
+      }
+      if (promptSelect) {
+        payload.prompt_id = promptSelect.value ? String(promptSelect.value) : null;
+      }
 
       try {
         button.disabled = true;
@@ -1959,13 +2277,13 @@ async function fetchPipelineDetails(pipelineId, options = {}) {
   try {
     const response = await fetch(`/settings/pipelines/${pipelineId}`);
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(parseApiError(data, 'Failed to load details da pipeline'));
+    if (!response.ok) throw new Error(parseApiError(data, 'Failed to load pipeline details'));
 
     currentPipelineDetails = data;
     renderPipelineDetails(data);
     wirePipelineDetailsActions(pipelineId);
   } catch (err) {
-    pipelineDetailsContent.innerHTML = `<div class="form-result error">Error: ${escapeHtml(normalizeError(err, 'Failed to load details da pipeline'))}</div>`;
+    pipelineDetailsContent.innerHTML = `<div class="form-result error">Error: ${escapeHtml(normalizeError(err, 'Failed to load pipeline details'))}</div>`;
   }
 }
 
@@ -1991,6 +2309,19 @@ if (promptCancelBtn) {
 
 if (taskEditCancelBtn) {
   taskEditCancelBtn.addEventListener('click', closeTaskEditModal);
+}
+
+if (cancelEditTaskBtn) {
+  cancelEditTaskBtn.addEventListener('click', () => {
+    clearSubmitEditMode();
+    if (submitForm) submitForm.reset();
+    updateScheduleState();
+    resetSubmitFormLinks();
+    if (submitResult) {
+      submitResult.className = 'form-result';
+      submitResult.textContent = '';
+    }
+  });
 }
 
 if (backToTasksBtn) {
@@ -2104,7 +2435,9 @@ document.addEventListener('DOMContentLoaded', () => {
   applySidebarCollapsedState(readSidebarCollapsedState());
   showSection('tasks-section');
 
+  applyStaticActionIcons();
   updateScheduleState();
+  setSubmitFormMode(false);
   updateTaskEditScheduleState();
   resetSubmitFormLinks();
 

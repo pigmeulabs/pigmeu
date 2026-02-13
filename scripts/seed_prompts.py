@@ -15,108 +15,189 @@ INITIAL_PROMPTS = [
     {
         "name": "Book Metadata Extractor",
         "purpose": "Extract structured metadata from Amazon product pages",
-        "system_prompt": """You are an expert data extractor specializing in book metadata from e-commerce platforms.
-Your task is to extract structured information from book pages with high accuracy.
-Always return valid JSON with the exact schema provided.""",
-        "user_prompt": """Extract the following metadata from the given book information:
-- title_original: Original title if different from current listing
-- authors: List of author names
-- theme: Main theme or category
-- lang_original: Language the book was originally written in
-- lang_edition: Language of this edition
-- edition: Edition number or description
-- pub_date: Publication date (YYYY-MM-DD format if possible)
-- publisher: Publisher name
-- isbn: ISBN number
-- pages: Number of pages
-- price_physical: Price of physical book
-- price_ebook: Price of ebook version
-- amazon_rating: Rating on Amazon (0-5 scale)
+        "short_description": "Extracts normalized metadata from book pages.",
+        "system_prompt": """You are a high-precision bibliographic extraction assistant optimized for API inference.
+Use only the evidence present in the input.
+Do not hallucinate missing values.
+Respond in Portuguese (pt-BR).
+Return only valid JSON following the expected output schema.""",
+        "user_prompt": """Task: extract normalized metadata for a book.
 
-Return ONLY valid JSON with these keys. Use null for missing information.""",
+Input source:
+{{data}}
+
+Rules:
+1. Use only factual information from input.
+2. Keep numbers as numbers where possible.
+3. Use null for unknown fields.
+4. Preserve identifiers exactly (ISBN, ASIN, URLs).
+5. Respond in Portuguese (pt-BR), except identifiers/URLs.
+6. Return only the JSON object.""",
         "model_id": "gpt-3.5-turbo",
         "temperature": 0.3,
         "max_tokens": 500,
-        "schema_example": """{
-  "title_original": "string",
+        "expected_output_format": """{
+  "title_original": "string|null",
   "authors": ["string"],
-  "theme": "string",
-  "lang_original": "string",
-  "lang_edition": "string",
-  "edition": "string",
-  "pub_date": "string",
-  "publisher": "string",
-  "isbn": "string",
-  "pages": 0,
-  "price_physical": 0.0,
-  "price_ebook": 0.0,
-  "amazon_rating": 0.0
+  "theme": "string|null",
+  "lang_original": "string|null",
+  "lang_edition": "string|null",
+  "edition": "string|null",
+  "pub_date": "string|null",
+  "publisher": "string|null",
+  "isbn": "string|null",
+  "pages": "number|null",
+  "price_physical": "number|string|null",
+  "price_ebook": "number|string|null",
+  "amazon_rating": "number|null"
+}""",
+        "schema_example": """{
+  "title_original": "Scrum and Kanban",
+  "authors": ["Chico Alff"],
+  "theme": "Gestão ágil",
+  "lang_original": "Inglês",
+  "lang_edition": "Português",
+  "edition": "2ª edição",
+  "pub_date": "2025-03-05",
+  "publisher": "Editora Exemplo",
+  "isbn": "9781234567897",
+  "pages": 312,
+  "price_physical": 89.9,
+  "price_ebook": 39.9,
+  "amazon_rating": 4.6
 }""",
         "created_at": datetime.utcnow(),
     },
     {
         "name": "Context Generator - Technical Books",
         "purpose": "Generate structured markdown context and knowledge base for technical books",
-        "system_prompt": """You are an expert technical writer and knowledge architect.
-Your role is to synthesize information about technical books into a well-structured, 
-markdown-formatted knowledge base that will serve as context for AI models.
+        "short_description": "Builds a reusable knowledge base context in Markdown.",
+        "system_prompt": """You are an expert technical writer and knowledge architect optimized for API execution.
+Synthesize the provided evidence into structured Markdown suitable for downstream LLM tasks.
+Do not invent facts.
+Respond in Portuguese (pt-BR).""",
+        "user_prompt": """Task: generate a structured knowledge base for "{{title}}" by {{author}}.
 
-Create a comprehensive, organized, and searchable knowledge base in markdown format.""",
-        "user_prompt": """Based on the book information and extracted data provided below, create a structured markdown 
-knowledge base for "{{title}}" by {{author}}.
+Input data:
+{{data}}
 
-Structure it with:
-1. Overview section: Main topic and relevance
-2. Key Concepts: Main ideas and frameworks discussed
-3. Technical Details: Specific technologies, tools, or methodologies
-4. Target Audience: Who should read this
-5. Prerequisites: What readers should know before reading
-6. Main Takeaways: Key learnings
-
-Make it comprehensive yet readable, using headings, lists, and clear hierarchy.
-Data to incorporate:
-{{data}}""",
+Requirements:
+1. Use concise and objective language.
+2. Keep section hierarchy clear and deterministic.
+3. Highlight actionable insights.
+4. Mention uncertainties explicitly when data is incomplete.
+5. Respond in Portuguese (pt-BR).
+6. Follow the expected output format exactly.""",
         "model_id": "gpt-3.5-turbo",
         "temperature": 0.7,
         "max_tokens": 1500,
-        "schema_example": None,
+        "expected_output_format": """Markdown template:
+# Base de Conhecimento: <titulo>
+
+## Visão Geral
+- Tema principal
+- Relevância
+
+## Conceitos-Chave
+- Conceito 1
+- Conceito 2
+
+## Detalhes Técnicos
+- Ferramentas / métodos / práticas
+
+## Público-Alvo
+- Perfil recomendado
+
+## Pré-requisitos
+- Conhecimentos prévios
+
+## Principais Aprendizados
+- Aprendizado 1
+- Aprendizado 2""",
+        "schema_example": """# Base de Conhecimento: Scrum e Kanban
+
+## Visão Geral
+- Tema principal: gestão ágil de fluxo de trabalho
+- Relevância: melhoria de previsibilidade e entrega contínua
+
+## Conceitos-Chave
+- Limites de WIP
+- Ciclo de feedback curto
+
+## Detalhes Técnicos
+- Quadro Kanban
+- Métricas de lead time e throughput
+
+## Público-Alvo
+- Times de produto e engenharia
+
+## Pré-requisitos
+- Noções básicas de processos de software
+
+## Principais Aprendizados
+- Como reduzir gargalos
+- Como evoluir o processo com dados""",
         "created_at": datetime.utcnow(),
     },
     {
         "name": "Topic Extractor for Books",
         "purpose": "Extract 3 main topics/themes from a book to structure article sections",
-        "system_prompt": """You are a book analyst expert at identifying core topics and themes.
-Extract the 3 most important, distinct topics that a reader should understand about this book.
-These topics will form the thematic sections of a review article.""",
-        "user_prompt": """Analyze the book "{{title}}" by {{author}} and extract exactly 3 main topics/themes.
+        "short_description": "Extracts exactly three editorial themes in JSON.",
+        "system_prompt": """You are a book analysis assistant optimized for API-based topic extraction.
+Identify exactly 3 distinct themes that maximize editorial value.
+Use only provided evidence.
+Respond in Portuguese (pt-BR).
+Return strict JSON only.""",
+        "user_prompt": """Task: analyze "{{title}}" by {{author}} and extract exactly 3 core themes.
 
-For each topic provide:
-1. Topic name (2-4 words)
-2. Brief description (1-2 sentences)
-3. Key subtopics (3-5 bullet points)
+Book evidence:
+{{data}}
 
-Format as JSON:
-{
-  "topics": [
-    {
-      "name": "Topic Name",
-      "description": "What this topic covers",
-      "subtopics": ["subtopic1", "subtopic2", "subtopic3"]
-    }
-  ]
-}
-
-Book info:
-{{data}}""",
+Rules:
+1. Theme names must be concise (2 to 5 words).
+2. Descriptions must be objective (1 to 2 sentences).
+3. Provide 3 to 5 subtopics per theme.
+4. Avoid overlap between themes.
+5. Respond in Portuguese (pt-BR).
+6. Return only the JSON object.""",
         "model_id": "gpt-3.5-turbo",
         "temperature": 0.5,
         "max_tokens": 600,
+        "expected_output_format": """{
+  "topics": [
+    {
+      "name": "string",
+      "description": "string",
+      "subtopics": ["string", "string", "string"]
+    },
+    {
+      "name": "string",
+      "description": "string",
+      "subtopics": ["string", "string", "string"]
+    },
+    {
+      "name": "string",
+      "description": "string",
+      "subtopics": ["string", "string", "string"]
+    }
+  ]
+}""",
         "schema_example": """{
   "topics": [
     {
-      "name": "Distributed Systems",
-      "description": "Principles and challenges of building reliable systems across multiple machines",
-      "subtopics": ["Replication", "Consistency models", "Fault tolerance"]
+      "name": "Gestão de Fluxo",
+      "description": "Explica como visualizar trabalho, limitar WIP e melhorar previsibilidade.",
+      "subtopics": ["Quadro visual", "Limites de WIP", "Lead time"]
+    },
+    {
+      "name": "Entrega Incremental",
+      "description": "Mostra como reduzir risco por ciclos curtos de entrega e validação.",
+      "subtopics": ["Lotes menores", "Feedback contínuo", "Priorização"]
+    },
+    {
+      "name": "Melhoria Contínua",
+      "description": "Aborda métricas e rotinas para evoluir o processo de forma sustentável.",
+      "subtopics": ["Métricas operacionais", "Retrospectivas", "Ajustes de processo"]
     }
   ]
 }""",
@@ -125,90 +206,166 @@ Book info:
     {
         "name": "SEO-Optimized Article Writer",
         "purpose": "Generate a complete, SEO-optimized technical book review article with proper structure",
-        "system_prompt": """You are an expert SEO-optimized technical writer and book reviewer.
-Your goal is to write comprehensive, well-structured articles that rank well in search engines 
-while being genuinely helpful to readers.
+        "short_description": "Generates SEO article in Markdown with deterministic structure.",
+        "system_prompt": """You are an SEO-focused technical reviewer optimized for API generation.
+Produce high-quality, factual, and readable Markdown articles.
+Use only available context and avoid unsupported claims.
+Respond in Portuguese (pt-BR).""",
+        "user_prompt": """Task: write a complete SEO-oriented review article for "{{title}}" by {{author}}.
 
-Key guidelines:
-- Use natural language with target keywords incorporated smoothly
-- Structure: 1 H1 title, 8 H2 sections (3 thematic + 5 fixed), 1 H2 can have 2-4 H3 subsections
-- Total length: 800-1333 words
-- Paragraphs: 3-6 sentences (50-100 words each)
-- Every section must provide real value
-- Include practical examples when relevant""",
-        "user_prompt": """Write a comprehensive SEO-optimized review article for "{{title}}" by {{author}}.
+Themes:
+- Theme 1: {{topic1}}
+- Theme 2: {{topic2}}
+- Theme 3: {{topic3}}
 
-Structure:
-1. [Dynamic Theme 1]: {{topic1}} (H2, 200+ words)
-   - Include 2-3 H3 subsections with specific details
-2. [Dynamic Theme 2]: {{topic2}} (H2, 200+ words)
-   - Include 2-3 H3 subsections with specific details
-3. [Dynamic Theme 3]: {{topic3}} (H2, 200+ words)
-   - Include 2-3 H3 subsections with specific details
-4. Introduction to Book Topic (H2, 150+ words)
-5. Context and Motivation (H2, 150+ words)
-6. Impact and Applicability (H2, 150+ words)
-7. Book Details (H2, 100+ words): metadata, ISBN, links
-8. About the Author (H2, 100+ words): biography, notable works
-9. Download & Links (H2, 50+ words): purchase/reading links
-10. Related Subjects (H2, 80+ words): topical links for SEO
+Context:
+{{context}}
 
-Total word count: 800-1333 words
-
-Context and metadata:
-{{context}}""",
+Requirements:
+1. Use deterministic section structure.
+2. Keep clear headings and strong readability.
+3. Include practical insights and editorial relevance.
+4. Keep style objective and useful for readers.
+5. Respond in Portuguese (pt-BR).
+6. Follow the expected output format exactly.""",
         "model_id": "gpt-3.5-turbo",
         "temperature": 0.7,
         "max_tokens": 2500,
-        "schema_example": None,
+        "expected_output_format": """Markdown template:
+# <Título SEO do artigo>
+
+## {{topic1}}
+### Subtópico 1
+### Subtópico 2
+
+## {{topic2}}
+### Subtópico 1
+### Subtópico 2
+
+## {{topic3}}
+### Subtópico 1
+### Subtópico 2
+
+## Introdução ao Tema do Livro
+## Contexto e Motivação
+## Impacto e Aplicabilidade
+## Detalhes do Livro
+## Sobre o Autor
+## Download e Links
+## Assuntos Relacionados""",
+        "schema_example": """# Scrum e Kanban: Guia Prático para Times de Produto
+
+## Gestão de Fluxo
+### Visualização do Trabalho
+### Limites de WIP
+
+## Entrega Incremental
+### Redução de Risco
+### Feedback Contínuo
+
+## Melhoria Contínua
+### Métricas Operacionais
+### Evolução de Processo
+
+## Introdução ao Tema do Livro
+## Contexto e Motivação
+## Impacto e Aplicabilidade
+## Detalhes do Livro
+## Sobre o Autor
+## Download e Links
+## Assuntos Relacionados""",
         "created_at": datetime.utcnow(),
     },
     {
         "name": "Link Summarizer",
         "purpose": "Summarize external web page content into structured markdown for knowledge base",
-        "system_prompt": """You are an expert at reading web content and extracting key information.
-Summarize the provided web page content into a structured markdown summary.
-Focus on extracting facts, data, insights, and topic keywords relevant to the context.""",
-        "user_prompt": """Summarize this web page about "{{title}}":
+        "short_description": "Summarizes external pages using deterministic markdown sections.",
+        "system_prompt": """You are a web-content summarization assistant optimized for API workflows.
+Extract key facts, insights, and relevance for editorial usage.
+Do not invent information not present in the source.
+Respond in Portuguese (pt-BR).""",
+        "user_prompt": """Task: summarize this web content about "{{title}}".
 
-[Content]:
+Source content:
 {{content}}
 
-Create a markdown summary with:
-1. Main idea (2-3 sentences)
-2. Key points (5-7 bullets)
-3. Relevant topics/keywords (comma-separated list)
-4. Credibility/source quality (one sentence)
-
-Keep it concise but informative (150-250 words).""",
+Requirements:
+1. Keep summary concise and factual.
+2. Prioritize relevance for book/author analysis.
+3. Explicitly indicate credibility level.
+4. Respond in Portuguese (pt-BR).
+5. Follow the expected output format exactly.""",
         "model_id": "gpt-3.5-turbo",
         "temperature": 0.5,
         "max_tokens": 400,
-        "schema_example": None,
+        "expected_output_format": """Markdown template:
+## Ideia Principal
+<2-3 frases>
+
+## Pontos-Chave
+- ponto 1
+- ponto 2
+- ponto 3
+
+## Tópicos Relevantes
+- tópico 1
+- tópico 2
+
+## Credibilidade da Fonte
+<alta|media|baixa + justificativa curta>""",
+        "schema_example": """## Ideia Principal
+O conteúdo apresenta uma visão prática sobre aplicação de métodos ágeis em times de produto.
+
+## Pontos-Chave
+- Destaca limites de WIP para reduzir gargalos
+- Mostra exemplos de melhoria contínua com métricas
+- Relaciona processo com previsibilidade de entregas
+
+## Tópicos Relevantes
+- gestão ágil
+- kanban
+- métricas de fluxo
+
+## Credibilidade da Fonte
+media — apresenta exemplos úteis, mas sem referências metodológicas detalhadas.""",
         "created_at": datetime.utcnow(),
     },
 ]
 
 
 async def seed_prompts():
-    """Insert initial prompts into the database."""
+    """Upsert default prompts into the database."""
     db = await get_database()
     prompts_collection = db["prompts"]
     
     try:
-        # Check if prompts already exist
-        count = await prompts_collection.count_documents({})
-        if count > 0:
-            print(f"⚠️  Database already has {count} prompts. Skipping seed.")
-            return
-        
-        # Insert initial prompts
-        result = await prompts_collection.insert_many(INITIAL_PROMPTS)
-        print(f"✅ Seeded {len(result.inserted_ids)} initial prompts:")
+        created = 0
+        updated = 0
+        now = datetime.utcnow()
+        touched_ids = []
+
+        for prompt in INITIAL_PROMPTS:
+            name = prompt["name"]
+            existing = await prompts_collection.find_one({"name": name})
+            payload = {**prompt, "updated_at": now}
+
+            if existing:
+                # Keep original creation timestamp when prompt already exists.
+                payload["created_at"] = existing.get("created_at", prompt.get("created_at", now))
+                await prompts_collection.update_one({"_id": existing["_id"]}, {"$set": payload})
+                touched_ids.append(existing["_id"])
+                updated += 1
+            else:
+                payload.setdefault("created_at", now)
+                result = await prompts_collection.insert_one(payload)
+                touched_ids.append(result.inserted_id)
+                created += 1
+
+        print(f"✅ Default prompts synchronized. Created: {created}, Updated: {updated}.")
         for i, prompt in enumerate(INITIAL_PROMPTS, 1):
             print(f"   {i}. {prompt['name']} ({prompt['model_id']})")
-        
-        return result.inserted_ids
+
+        return touched_ids
     
     except Exception as e:
         print(f"❌ Error seeding prompts: {e}")
